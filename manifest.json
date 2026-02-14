@@ -1,0 +1,29 @@
+
+{
+  "short_name": "Wagachat!",
+  "name": "Wagachat!: Fun & Safe Chat",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "start_url": ".",
+  "background_color": "#FFF9E6",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#3B82F6",
+  "description": "A colorful and fun human-only chat for kids."
+}
