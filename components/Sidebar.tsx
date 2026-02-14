@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MOCK_DIRECTORY } from '../constants.ts';
+import { db } from '../firebase.ts';
+import { collection, onSnapshot, query, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { Friend } from '../types.ts';
 
 interface Props {
@@ -14,9 +15,35 @@ interface Props {
 const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Friend[]>([]);
+
+  // Listen to the cloud for anyone who joins!
+  useEffect(() => {
+    const q = query(collection(db, "users"), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const users: Friend[] = [];
+      const currentUserId = localStorage.getItem('wagachat_userId');
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        // Don't show ourselves in the search/list
+        if (data.id !== currentUserId) {
+          users.push({
+            id: data.id,
+            name: data.name,
+            avatar: data.avatar,
+            status: data.status,
+            color: data.color || 'bg-blue-400'
+          });
+        }
+      });
+      setOnlineUsers(users);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const searchResults = searchTerm.trim() 
-    ? MOCK_DIRECTORY.filter(f => 
+    ? onlineUsers.filter(f => 
         f.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
         !friends.find(existing => existing.id === f.id)
       )
@@ -61,7 +88,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className={`flex items-center justify-between mb-6 ${isOpen ? '' : 'hidden'}`}>
-          <h2 className="font-kids text-pink-500 text-xl">My Friends</h2>
+          <h2 className="font-kids text-pink-500 text-xl">Explorers</h2>
           <button 
             onClick={() => setIsSearching(!isSearching)}
             className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSearching ? 'bg-red-100 text-red-500' : 'bg-pink-100 text-pink-500'} hover:scale-110 shadow-sm`}
@@ -75,7 +102,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Find a friend..."
+                placeholder="Search real friends..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full p-4 rounded-3xl border-4 border-dashed border-pink-200 focus:border-pink-400 focus:ring-4 focus:ring-pink-50 outline-none text-lg font-bold placeholder-pink-100 text-pink-600"
@@ -105,8 +132,8 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
               </div>
             ) : searchTerm && (
               <div className="text-center p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                <p className="text-sm text-gray-400 font-bold italic">No explorers found!</p>
-                <p className="text-xs text-gray-300">Try searching for 'Alex' or 'Mia'</p>
+                <p className="text-sm text-gray-400 font-bold italic">No explorers found yet!</p>
+                <p className="text-xs text-gray-300">Wait for them to log in on another device!</p>
               </div>
             )}
           </div>
@@ -115,7 +142,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
         {friends.length === 0 && isOpen && !isSearching && (
           <div className="text-center p-6 bg-pink-50 rounded-[2rem] border-4 border-dashed border-pink-100">
             <p className="text-pink-400 font-bold text-sm mb-2">No friends yet!</p>
-            <p className="text-xs text-pink-300">Tap the 🔍 to find friends to chat with!</p>
+            <p className="text-xs text-pink-300">Tap the 🔍 to find other devices!</p>
           </div>
         )}
 

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Friend } from '../types';
+import { Friend } from '../types.ts';
 
 interface Props {
   userName: string;
@@ -48,7 +48,6 @@ const VideoConference: React.FC<Props> = ({ userName, friends }) => {
     }
   };
 
-  // Only show actual friends who are added
   const activeParticipants = friends.slice(0, 3);
   const totalParticipants = 1 + activeParticipants.length;
 
@@ -59,7 +58,6 @@ const VideoConference: React.FC<Props> = ({ userName, friends }) => {
           ? 'grid-cols-1' 
           : 'grid-cols-1 md:grid-cols-2'
       }`}>
-        {/* User Local Stream */}
         <div className={`relative group rounded-[3rem] overflow-hidden bg-gray-900 shadow-2xl border-8 border-white ring-8 ring-blue-100 transition-all duration-500 ${
           totalParticipants === 1 ? 'max-w-4xl mx-auto w-full' : ''
         }`}>
@@ -87,7 +85,6 @@ const VideoConference: React.FC<Props> = ({ userName, friends }) => {
           )}
         </div>
 
-        {/* Display Actual Friends only */}
         {activeParticipants.map((f, i) => (
           <div key={f.id} className={`relative rounded-[3rem] overflow-hidden shadow-2xl border-8 border-white ring-8 ${i === 0 ? 'ring-pink-100' : i === 1 ? 'ring-yellow-100' : 'ring-purple-100'}`}>
             <img 
@@ -110,7 +107,6 @@ const VideoConference: React.FC<Props> = ({ userName, friends }) => {
         ))}
       </div>
 
-      {/* Controls */}
       <div className="flex items-center justify-center gap-4 md:gap-8 p-6 bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-2xl border-4 border-white mb-4">
         <button 
           onClick={toggleMute}

@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import { db } from '../firebase.ts';
+import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   onStart: (name: string) => void;
@@ -7,10 +9,36 @@ interface Props {
 
 const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
   const [name, setName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) onStart(name);
+    const trimmedName = name.trim();
+    if (trimmedName) {
+      setIsRegistering(true);
+      try {
+        // We create a unique ID for this session/device
+        const userId = `user_${Date.now()}`;
+        // Save user to the cloud "users" collection
+        await setDoc(doc(db, "users", userId), {
+          id: userId,
+          name: trimmedName,
+          avatar: ['🐶', '🐱', '🦁', '🦖', '🐰', '🐼'][Math.floor(Math.random() * 6)],
+          status: 'online',
+          color: 'bg-blue-400',
+          lastSeen: new Date()
+        });
+        
+        // Save userId locally so we can identify ourselves later
+        localStorage.setItem('wagachat_userId', userId);
+        onStart(trimmedName);
+      } catch (error) {
+        console.error("Error joining:", error);
+        alert("Oh no! The cloud is stormy. Try again! ⛈️");
+      } finally {
+        setIsRegistering(false);
+      }
+    }
   };
 
   return (
@@ -29,14 +57,15 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
             className="w-full text-center p-4 text-2xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none transition-all text-blue-600 placeholder-blue-200"
             maxLength={12}
             autoFocus
+            disabled={isRegistering}
           />
           
           <button
             type="submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || isRegistering}
             className="w-full bg-pink-500 hover:bg-pink-600 text-white font-kids text-2xl py-4 rounded-3xl shadow-lg transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Let's Go! 🚀
+            {isRegistering ? 'Joining...' : "Let's Go! 🚀"}
           </button>
         </form>
       </div>
