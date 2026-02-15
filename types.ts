@@ -5,6 +5,7 @@ export interface Message {
   text: string;
   timestamp: Date;
   senderName: string;
+  senderColor: string;
   avatar: string;
   imageUrl?: string;
 }
