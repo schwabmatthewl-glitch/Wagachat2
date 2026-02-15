@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Wagachat!</title>
     <meta name="theme-color" content="#3B82F6">
     <meta name="mobile-web-app-capable" content="yes">
@@ -17,19 +17,21 @@
       body {
         font-family: 'Quicksand', sans-serif;
         background-color: #FDFCF0;
-        /* Prevent the "pull down to refresh" behavior on mobile */
+        /* Prevent the "pull down to refresh" behavior on Android/iOS */
         overscroll-behavior-y: none;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;
+        position: fixed;
+        width: 100%;
+      }
+      #root {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
       }
       .font-kids {
         font-family: 'Fredoka One', cursive;
-      }
-      .glass {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border: 2px solid rgba(255, 255, 255, 0.3);
       }
       .floating {
         animation: floating 3s ease-in-out infinite;
@@ -38,7 +40,6 @@
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-10px); }
       }
-      /* Custom scrollbar for a cleaner look */
       .custom-scrollbar::-webkit-scrollbar {
         width: 8px;
       }
@@ -48,9 +49,6 @@
       .custom-scrollbar::-webkit-scrollbar-thumb {
         background: #E2E8F0;
         border-radius: 10px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #CBD5E1;
       }
     </style>
   <script type="importmap">
@@ -68,17 +66,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- Main entry point for the React app -->
     <script type="module" src="./index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Wagachat! Service Worker registered!'))
-            .catch(err => console.log('Service Worker registration failed:', err));
-        });
-      }
-    </script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
