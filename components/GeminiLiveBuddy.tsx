@@ -50,9 +50,11 @@ const GeminiLiveBuddy: React.FC = () => {
   const nextStartTimeRef = useRef(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const streamRef = useRef<MediaStream | null>(null);
+  const sessionPromiseRef = useRef<Promise<any> | null>(null);
 
   const startSession = async () => {
     setIsConnecting(true);
+    // Create new GoogleGenAI instance right before call to ensure up-to-date config
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -83,6 +85,7 @@ const GeminiLiveBuddy: React.FC = () => {
                 data: encode(new Uint8Array(int16.buffer)),
                 mimeType: 'audio/pcm;rate=16000',
               };
+              // Crucial: send input only after session promise resolves
               sessionPromise.then(s => s.sendRealtimeInput({ media: pcmBlob }));
             };
             source.connect(scriptProcessor);
@@ -137,6 +140,7 @@ const GeminiLiveBuddy: React.FC = () => {
           },
         }
       });
+      sessionPromiseRef.current = sessionPromise;
     } catch (err) {
       console.error(err);
       setIsConnecting(false);
@@ -145,8 +149,15 @@ const GeminiLiveBuddy: React.FC = () => {
 
   const stopSession = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
+    // Properly close the session
+    sessionPromiseRef.current?.then(s => s.close());
+    sessionPromiseRef.current = null;
     setIsActive(false);
   };
+
+  useEffect(() => {
+    return () => stopSession();
+  }, []);
 
   return (
     <div className="h-full flex flex-col items-center justify-center space-y-8 max-w-2xl mx-auto text-center px-4">
@@ -196,7 +207,7 @@ const GeminiLiveBuddy: React.FC = () => {
         )}
         {transcript.slice(-3).map((text, i) => (
           <p key={i} className="text-gray-400 font-bold mb-1 opacity-60 text-base">
-             {i === 2 ? 'Sparky: ' : ''}{text}
+             {text}
           </p>
         )).reverse()}
       </div>

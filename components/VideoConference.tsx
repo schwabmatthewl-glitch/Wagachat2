@@ -1,133 +1,268 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Friend } from '../types.ts';
+import { db } from '../firebase.ts';
+import { collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query, onSnapshotsInSync } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   userName: string;
-  friends: Friend[];
 }
 
-const VideoConference: React.FC<Props> = ({ userName, friends }) => {
-  const [stream, setStream] = useState<MediaStream | null>(null);
+const servers = {
+  iceServers: [
+    {
+      urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'],
+    },
+  ],
+  iceCandidatePoolSize: 10,
+};
+
+const VideoConference: React.FC<Props> = ({ userName }) => {
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<{ [key: string]: MediaStream }>({});
+  const [participants, setParticipants] = useState<any[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const peerConnections = useRef<{ [key: string]: RTCPeerConnection }>({});
+  const myId = useRef(localStorage.getItem('wagachat_userId') || `guest_${Date.now()}`);
 
   useEffect(() => {
-    async function getMedia() {
+    const startMedia = async () => {
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setLocalStream(stream);
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        
+        // 1. Announce presence
+        const presenceRef = doc(db, 'video_presence', myId.current);
+        await setDoc(presenceRef, {
+          id: myId.current,
+          name: userName,
+          joinedAt: new Date(),
         });
-        setStream(mediaStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-        }
+
+        // 2. Listen for other participants
+        onSnapshot(collection(db, 'video_presence'), (snapshot) => {
+          const others: any[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            if (data.id !== myId.current) others.push(data);
+          });
+          setParticipants(others);
+        });
+
+        // 3. Listen for incoming calls (Signaling)
+        const callsCol = collection(db, 'video_calls');
+        onSnapshot(callsCol, async (snapshot) => {
+          snapshot.docChanges().forEach(async (change) => {
+            if (change.type === 'added') {
+              const data = change.doc.data();
+              // If someone is calling ME
+              if (data.to === myId.current && !peerConnections.current[data.from]) {
+                await answerCall(change.doc.id, data.from, data.offer, stream);
+              }
+            }
+          });
+        });
+
       } catch (err) {
-        console.error("Error accessing media devices", err);
+        console.error("Camera access error:", err);
+        alert("Oh no! Sparky couldn't find your camera! 📸");
       }
-    }
-    getMedia();
+    };
+
+    startMedia();
+
     return () => {
-      stream?.getTracks().forEach(track => track.stop());
+      // Cleanup
+      localStream?.getTracks().forEach(t => t.stop());
+      // Fix: Cast values to RTCPeerConnection array to avoid 'unknown' type error on pc.close()
+      (Object.values(peerConnections.current) as RTCPeerConnection[]).forEach(pc => pc.close());
+      deleteDoc(doc(db, 'video_presence', myId.current));
     };
   }, []);
 
+  const createPeerConnection = (otherId: string, stream: MediaStream) => {
+    const pc = new RTCPeerConnection(servers);
+    
+    stream.getTracks().forEach((track) => {
+      pc.addTrack(track, stream);
+    });
+
+    pc.ontrack = (event) => {
+      setRemoteStreams((prev) => ({
+        ...prev,
+        [otherId]: event.streams[0],
+      }));
+    };
+
+    peerConnections.current[otherId] = pc;
+    return pc;
+  };
+
+  // Called when we see a new participant and want to initiate connection
+  const callUser = async (otherId: string) => {
+    if (peerConnections.current[otherId] || !localStream) return;
+    
+    const pc = createPeerConnection(otherId, localStream);
+    const offerDescription = await pc.createOffer();
+    await pc.setLocalDescription(offerDescription);
+
+    const callDoc = doc(collection(db, 'video_calls'));
+    const offer = {
+      sdp: offerDescription.sdp,
+      type: offerDescription.type,
+    };
+
+    await setDoc(callDoc, { from: myId.current, to: otherId, offer });
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        addDoc(collection(callDoc, 'offerCandidates'), event.candidate.toJSON());
+      }
+    };
+
+    // Listen for answer
+    onSnapshot(callDoc, (doc) => {
+      const data = doc.data();
+      if (!pc.currentRemoteDescription && data?.answer) {
+        const answerDescription = new RTCSessionDescription(data.answer);
+        pc.setRemoteDescription(answerDescription);
+      }
+    });
+
+    // Listen for remote ICE candidates
+    onSnapshot(collection(callDoc, 'answerCandidates'), (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const candidate = new RTCIceCandidate(change.doc.data());
+          pc.addIceCandidate(candidate);
+        }
+      });
+    });
+  };
+
+  const answerCall = async (callId: string, fromId: string, offer: any, stream: MediaStream) => {
+    const pc = createPeerConnection(fromId, stream);
+    const callDoc = doc(db, 'video_calls', callId);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        addDoc(collection(callDoc, 'answerCandidates'), event.candidate.toJSON());
+      }
+    };
+
+    const offerDescription = new RTCSessionDescription(offer);
+    await pc.setRemoteDescription(offerDescription);
+
+    const answerDescription = await pc.createAnswer();
+    await pc.setLocalDescription(answerDescription);
+
+    const answer = {
+      type: answerDescription.type,
+      sdp: answerDescription.sdp,
+    };
+
+    await setDoc(callDoc, { answer }, { merge: true });
+
+    onSnapshot(collection(callDoc, 'offerCandidates'), (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          pc.addIceCandidate(new RTCIceCandidate(data));
+        }
+      });
+    });
+  };
+
+  // Trigger calls to existing participants when we join
+  useEffect(() => {
+    participants.forEach(p => {
+      if (!peerConnections.current[p.id]) {
+        callUser(p.id);
+      }
+    });
+  }, [participants]);
+
   const toggleMute = () => {
-    if (stream) {
-      stream.getAudioTracks().forEach(track => track.enabled = !track.enabled);
+    if (localStream) {
+      localStream.getAudioTracks().forEach(t => t.enabled = !t.enabled);
       setIsMuted(!isMuted);
     }
   };
 
   const toggleVideo = () => {
-    if (stream) {
-      stream.getVideoTracks().forEach(track => track.enabled = !track.enabled);
+    if (localStream) {
+      localStream.getVideoTracks().forEach(t => t.enabled = !t.enabled);
       setIsVideoOff(!isVideoOff);
     }
   };
 
-  const activeParticipants = friends.slice(0, 3);
-  const totalParticipants = 1 + activeParticipants.length;
-
   return (
-    <div className="h-full flex flex-col gap-6">
-      <div className={`flex-1 grid gap-6 auto-rows-fr ${
-        totalParticipants === 1 
-          ? 'grid-cols-1' 
-          : 'grid-cols-1 md:grid-cols-2'
-      }`}>
-        <div className={`relative group rounded-[3rem] overflow-hidden bg-gray-900 shadow-2xl border-8 border-white ring-8 ring-blue-100 transition-all duration-500 ${
-          totalParticipants === 1 ? 'max-w-4xl mx-auto w-full' : ''
-        }`}>
+    <div className="h-full flex flex-col gap-8">
+      <div className="flex-1 grid gap-8 auto-rows-fr grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {/* Local Video */}
+        <div className="relative rounded-[3rem] overflow-hidden bg-gray-900 shadow-2xl border-8 border-white ring-8 ring-blue-100 group">
           <video 
-            ref={videoRef} 
+            ref={localVideoRef} 
             autoPlay 
             playsInline 
             muted 
-            className={`w-full h-full object-cover transition-opacity duration-500 ${isVideoOff ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity duration-500 ${isVideoOff ? 'opacity-0' : 'opacity-100'}`}
           />
           {isVideoOff && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-600">
-              <span className="text-9xl floating">🌟</span>
-              <span className="text-white font-kids text-2xl mt-4">Camera is Off!</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-blue-400">
+              <span className="text-9xl mb-4">🌟</span>
+              <p className="text-white font-kids text-2xl">Camera Off!</p>
             </div>
           )}
-          <div className="absolute bottom-6 left-6 bg-blue-500/80 backdrop-blur-xl px-6 py-3 rounded-[1.5rem] text-white font-kids text-lg shadow-lg border-2 border-white/50">
-            {userName} (Me) {isMuted && '🔇'}
+          <div className="absolute bottom-6 left-6 bg-blue-500/90 backdrop-blur-xl px-6 py-3 rounded-2xl text-white font-kids text-xl shadow-lg border-2 border-white/50">
+            Me {isMuted && '🔇'}
           </div>
-          
-          {totalParticipants === 1 && (
-            <div className="absolute top-6 right-6 bg-white/20 backdrop-blur-md px-6 py-3 rounded-full border border-white/30 animate-pulse">
-               <span className="text-white font-bold text-sm tracking-widest uppercase">Waiting for friends... 🌈</span>
-            </div>
-          )}
         </div>
 
-        {activeParticipants.map((f, i) => (
-          <div key={f.id} className={`relative rounded-[3rem] overflow-hidden shadow-2xl border-8 border-white ring-8 ${i === 0 ? 'ring-pink-100' : i === 1 ? 'ring-yellow-100' : 'ring-purple-100'}`}>
-            <img 
-              src={`https://picsum.photos/seed/${f.id}/800/600`} 
-              alt={f.name} 
-              className="w-full h-full object-cover opacity-90 transition-transform duration-700 hover:scale-110"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
-            <div className="absolute bottom-6 left-6 flex items-center gap-3 bg-white/90 backdrop-blur px-5 py-2.5 rounded-[1.5rem] shadow-lg border-2 border-white">
-              <span className="text-2xl">{f.avatar}</span>
-              <span className="font-kids text-gray-800 text-lg">{f.name}</span>
-            </div>
-            <div className="absolute top-6 right-6">
-              <span className="flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-green-500 shadow-sm border-2 border-white"></span>
-              </span>
+        {/* Remote Videos */}
+        {participants.map((p) => (
+          <div key={p.id} className="relative rounded-[3rem] overflow-hidden bg-gray-800 shadow-2xl border-8 border-white ring-8 ring-pink-100">
+            {remoteStreams[p.id] ? (
+              <video 
+                autoPlay 
+                playsInline 
+                className="w-full h-full object-cover"
+                ref={el => { if (el) el.srcObject = remoteStreams[p.id]; }}
+              />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-pink-400 animate-pulse">
+                <span className="text-9xl mb-4">🎈</span>
+                <p className="text-white font-kids text-2xl">Connecting to {p.name}...</p>
+              </div>
+            )}
+            <div className="absolute bottom-6 left-6 bg-pink-500/90 backdrop-blur-xl px-6 py-3 rounded-2xl text-white font-kids text-xl shadow-lg border-2 border-white/50">
+              {p.name}
             </div>
           </div>
         ))}
+        
+        {participants.length === 0 && (
+          <div className="relative rounded-[3rem] overflow-hidden bg-yellow-100 border-8 border-white border-dashed flex flex-col items-center justify-center p-12 text-center">
+            <span className="text-9xl mb-8 floating">🌈</span>
+            <h3 className="text-3xl font-kids text-yellow-600 mb-4">Waiting for friends!</h3>
+            <p className="text-yellow-700 font-bold text-xl">Tell someone to join the party on another device!</p>
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center justify-center gap-4 md:gap-8 p-6 bg-white/80 backdrop-blur-2xl rounded-[3rem] shadow-2xl border-4 border-white mb-4">
-        <button 
-          onClick={toggleMute}
-          className={`w-16 h-16 md:w-20 md:h-20 flex items-center justify-center text-3xl md:text-4xl rounded-[2rem] transition-all shadow-xl border-b-8 active:border-b-0 active:translate-y-2 ${isMuted ? 'bg-red-500 text-white border-red-800' : 'bg-blue-100 text-blue-600 border-blue-200 hover:bg-blue-200'}`}
-        >
+      <div className="flex items-center justify-center gap-6 p-8 bg-white/90 backdrop-blur-3xl rounded-[3.5rem] shadow-2xl border-4 border-white mb-6">
+        <button onClick={toggleMute} className={`w-20 h-20 flex items-center justify-center text-4xl rounded-3xl transition-all shadow-xl border-b-8 active:border-b-0 active:translate-y-2 ${isMuted ? 'bg-red-500 text-white border-red-800' : 'bg-blue-100 text-blue-600 border-blue-200 hover:bg-blue-200'}`}>
           {isMuted ? '🔇' : '🎤'}
         </button>
-        <button 
-          onClick={toggleVideo}
-          className={`w-16 h-16 md:w-20 md:h-20 flex items-center justify-center text-3xl md:text-4xl rounded-[2rem] transition-all shadow-xl border-b-8 active:border-b-0 active:translate-y-2 ${isVideoOff ? 'bg-red-500 text-white border-red-800' : 'bg-pink-100 text-pink-600 border-pink-200 hover:bg-pink-200'}`}
-        >
+        <button onClick={toggleVideo} className={`w-20 h-20 flex items-center justify-center text-4xl rounded-3xl transition-all shadow-xl border-b-8 active:border-b-0 active:translate-y-2 ${isVideoOff ? 'bg-red-500 text-white border-red-800' : 'bg-pink-100 text-pink-600 border-pink-200 hover:bg-pink-200'}`}>
           {isVideoOff ? '🚫' : '📹'}
         </button>
-        <button className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center text-3xl md:text-4xl bg-yellow-100 text-yellow-600 rounded-[2rem] transition-all shadow-xl border-b-8 border-yellow-200 hover:bg-yellow-200 active:border-b-0 active:translate-y-2">
-          🎉
-        </button>
-        <button className="hidden sm:block px-10 h-20 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-kids text-xl rounded-[2rem] shadow-2xl transition-all active:scale-95 border-b-8 border-red-800 active:border-b-0 active:translate-y-2 uppercase tracking-widest">
-          Leave Party
-        </button>
-        <button className="sm:hidden w-16 h-16 flex items-center justify-center bg-red-500 text-white rounded-[2rem] shadow-xl border-b-8 border-red-800 active:border-b-0 active:translate-y-2">
-          👋
+        <button className="px-12 h-20 bg-gradient-to-r from-red-500 to-pink-500 text-white font-kids text-2xl rounded-3xl shadow-2xl hover:scale-105 transition-all border-b-8 border-red-800 active:border-b-0 active:translate-y-2">
+          End Party 👋
         </button>
       </div>
     </div>
