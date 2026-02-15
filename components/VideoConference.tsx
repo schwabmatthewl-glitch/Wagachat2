@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { db } from '../firebase.ts';
-import { collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query, onSnapshotsInSync } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   userName: string;
@@ -20,12 +20,22 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<{ [key: string]: MediaStream }>({});
   const [participants, setParticipants] = useState<any[]>([]);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnections = useRef<{ [key: string]: RTCPeerConnection }>({});
-  const myId = useRef(localStorage.getItem('wagachat_userId') || `guest_${Date.now()}`);
+  const myId = localStorage.getItem('wagachat_userId') || `guest_${Date.now()}`;
+
+  const cleanup = async () => {
+    localStream?.getTracks().forEach(t => t.stop());
+    (Object.values(peerConnections.current) as RTCPeerConnection[]).forEach(pc => pc.close());
+    peerConnections.current = {};
+    try {
+      await deleteDoc(doc(db, 'video_presence', myId));
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const startMedia = async () => {
@@ -34,12 +44,12 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         setLocalStream(stream);
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
         
-        // 1. Announce presence
-        const presenceRef = doc(db, 'video_presence', myId.current);
+        // 1. Announce presence (Using fixed myId prevents duplicates on refresh)
+        const presenceRef = doc(db, 'video_presence', myId);
         await setDoc(presenceRef, {
-          id: myId.current,
+          id: myId,
           name: userName,
-          joinedAt: new Date(),
+          joinedAt: new Date().getTime(),
         });
 
         // 2. Listen for other participants
@@ -47,39 +57,34 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           const others: any[] = [];
           snapshot.forEach((d) => {
             const data = d.data();
-            if (data.id !== myId.current) others.push(data);
+            if (data.id !== myId) others.push(data);
           });
           setParticipants(others);
         });
 
-        // 3. Listen for incoming calls (Signaling)
-        const callsCol = collection(db, 'video_calls');
-        onSnapshot(callsCol, async (snapshot) => {
+        // 3. Listen for incoming calls
+        onSnapshot(collection(db, 'video_calls'), async (snapshot) => {
           snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added') {
               const data = change.doc.data();
-              // If someone is calling ME
-              if (data.to === myId.current && !peerConnections.current[data.from]) {
+              if (data.to === myId && !peerConnections.current[data.from]) {
                 await answerCall(change.doc.id, data.from, data.offer, stream);
               }
             }
           });
         });
 
+        window.addEventListener('beforeunload', cleanup);
       } catch (err) {
         console.error("Camera access error:", err);
-        alert("Oh no! Sparky couldn't find your camera! 📸");
+        alert("Oh no! We couldn't find your camera! 📸 Check your settings.");
       }
     };
 
     startMedia();
-
     return () => {
-      // Cleanup
-      localStream?.getTracks().forEach(t => t.stop());
-      // Fix: Cast values to RTCPeerConnection array to avoid 'unknown' type error on pc.close()
-      (Object.values(peerConnections.current) as RTCPeerConnection[]).forEach(pc => pc.close());
-      deleteDoc(doc(db, 'video_presence', myId.current));
+      window.removeEventListener('beforeunload', cleanup);
+      cleanup();
     };
   }, []);
 
@@ -97,49 +102,48 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
       }));
     };
 
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+        setRemoteStreams(prev => {
+          const next = { ...prev };
+          delete next[otherId];
+          return next;
+        });
+        if (focusedId === otherId) setFocusedId(null);
+      }
+    };
+
     peerConnections.current[otherId] = pc;
     return pc;
   };
 
-  // Called when we see a new participant and want to initiate connection
   const callUser = async (otherId: string) => {
     if (peerConnections.current[otherId] || !localStream) return;
     
     const pc = createPeerConnection(otherId, localStream);
-    const offerDescription = await pc.createOffer();
-    await pc.setLocalDescription(offerDescription);
-
     const callDoc = doc(collection(db, 'video_calls'));
-    const offer = {
-      sdp: offerDescription.sdp,
-      type: offerDescription.type,
-    };
-
-    await setDoc(callDoc, { from: myId.current, to: otherId, offer });
-
-    // Handle ICE candidates
+    
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         addDoc(collection(callDoc, 'offerCandidates'), event.candidate.toJSON());
       }
     };
 
-    // Listen for answer
+    const offerDescription = await pc.createOffer();
+    await pc.setLocalDescription(offerDescription);
+
+    await setDoc(callDoc, { from: myId, to: otherId, offer: { sdp: offerDescription.sdp, type: offerDescription.type } });
+
     onSnapshot(callDoc, (doc) => {
       const data = doc.data();
       if (!pc.currentRemoteDescription && data?.answer) {
-        const answerDescription = new RTCSessionDescription(data.answer);
-        pc.setRemoteDescription(answerDescription);
+        pc.setRemoteDescription(new RTCSessionDescription(data.answer));
       }
     });
 
-    // Listen for remote ICE candidates
     onSnapshot(collection(callDoc, 'answerCandidates'), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const candidate = new RTCIceCandidate(change.doc.data());
-          pc.addIceCandidate(candidate);
-        }
+        if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
       });
     });
   };
@@ -154,33 +158,23 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
       }
     };
 
-    const offerDescription = new RTCSessionDescription(offer);
-    await pc.setRemoteDescription(offerDescription);
-
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
     const answerDescription = await pc.createAnswer();
     await pc.setLocalDescription(answerDescription);
 
-    const answer = {
-      type: answerDescription.type,
-      sdp: answerDescription.sdp,
-    };
-
-    await setDoc(callDoc, { answer }, { merge: true });
+    await setDoc(callDoc, { answer: { type: answerDescription.type, sdp: answerDescription.sdp } }, { merge: true });
 
     onSnapshot(collection(callDoc, 'offerCandidates'), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          pc.addIceCandidate(new RTCIceCandidate(data));
-        }
+        if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
       });
     });
   };
 
-  // Trigger calls to existing participants when we join
+  // Only call users with "smaller" IDs to avoid collision
   useEffect(() => {
     participants.forEach(p => {
-      if (!peerConnections.current[p.id]) {
+      if (!peerConnections.current[p.id] && myId < p.id) {
         callUser(p.id);
       }
     });
@@ -200,32 +194,69 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     }
   };
 
+  const focusedParticipant = participants.find(p => p.id === focusedId);
+
   return (
-    <div className="h-full flex flex-col gap-8">
-      <div className="flex-1 grid gap-8 auto-rows-fr grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {/* Local Video */}
-        <div className="relative rounded-[3rem] overflow-hidden bg-gray-900 shadow-2xl border-8 border-white ring-8 ring-blue-100 group">
+    <div className="h-full flex flex-col relative bg-gray-900 rounded-[3rem] overflow-hidden">
+      {/* Main Large View Area */}
+      <div className="flex-1 relative flex items-center justify-center p-4">
+        {focusedId && remoteStreams[focusedId] ? (
+          <div className="w-full h-full relative animate-in fade-in zoom-in-95 duration-300">
+            <video 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover rounded-[2.5rem]"
+              ref={el => { if (el) el.srcObject = remoteStreams[focusedId!]; }}
+            />
+            <button 
+              onClick={() => setFocusedId(null)}
+              className="absolute top-6 right-6 w-14 h-14 bg-red-500 text-white rounded-full flex items-center justify-center text-3xl shadow-2xl hover:scale-110 active:scale-90 transition-all border-4 border-white z-20"
+            >
+              ✕
+            </button>
+            <div className="absolute bottom-8 left-8 bg-black/40 backdrop-blur-md px-6 py-3 rounded-2xl text-white font-kids text-2xl border-2 border-white/20">
+              Watching {focusedParticipant?.name}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center p-12 space-y-6">
+            <span className="text-9xl floating inline-block">🎈</span>
+            <h2 className="text-4xl font-kids text-white">Video Clubhouse</h2>
+            <p className="text-blue-200 text-xl font-bold">
+              {participants.length > 0 
+                ? "Tap a friend's video below to see them big!" 
+                : "Waiting for your friends to join the party..."}
+            </p>
+          </div>
+        )}
+
+        {/* Self View - Small overlay */}
+        <div className="absolute top-6 left-6 w-32 h-44 md:w-48 md:h-64 rounded-3xl overflow-hidden border-4 border-white shadow-2xl z-10 bg-gray-800">
           <video 
             ref={localVideoRef} 
             autoPlay 
             playsInline 
             muted 
-            className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity duration-500 ${isVideoOff ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity ${isVideoOff ? 'opacity-0' : 'opacity-100'}`}
           />
           {isVideoOff && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-blue-400">
-              <span className="text-9xl mb-4">🌟</span>
-              <p className="text-white font-kids text-2xl">Camera Off!</p>
-            </div>
+            <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-4xl">🌟</div>
           )}
-          <div className="absolute bottom-6 left-6 bg-blue-500/90 backdrop-blur-xl px-6 py-3 rounded-2xl text-white font-kids text-xl shadow-lg border-2 border-white/50">
-            Me {isMuted && '🔇'}
-          </div>
+          <div className="absolute bottom-2 right-2 bg-blue-500 text-white px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest">ME</div>
         </div>
+      </div>
 
-        {/* Remote Videos */}
+      {/* Thumbnails Strip - The 1/4 size windows */}
+      <div className="h-44 md:h-56 bg-white/10 backdrop-blur-xl border-t border-white/10 p-4 flex gap-4 overflow-x-auto custom-scrollbar">
         {participants.map((p) => (
-          <div key={p.id} className="relative rounded-[3rem] overflow-hidden bg-gray-800 shadow-2xl border-8 border-white ring-8 ring-pink-100">
+          <button 
+            key={p.id}
+            onClick={() => setFocusedId(p.id)}
+            className={`
+              relative h-full aspect-video rounded-2xl overflow-hidden shrink-0 transition-all border-4
+              ${focusedId === p.id ? 'border-pink-500 scale-95 ring-4 ring-pink-500/30' : 'border-white/20 hover:border-white hover:scale-105'}
+            `}
+          >
             {remoteStreams[p.id] ? (
               <video 
                 autoPlay 
@@ -234,35 +265,36 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
                 ref={el => { if (el) el.srcObject = remoteStreams[p.id]; }}
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-pink-400 animate-pulse">
-                <span className="text-9xl mb-4">🎈</span>
-                <p className="text-white font-kids text-2xl">Connecting to {p.name}...</p>
+              <div className="w-full h-full bg-pink-400 flex flex-col items-center justify-center gap-2">
+                <span className="text-3xl animate-bounce">🎈</span>
+                <span className="text-[10px] text-white font-bold px-2 text-center uppercase leading-tight">Calling {p.name}...</span>
               </div>
             )}
-            <div className="absolute bottom-6 left-6 bg-pink-500/90 backdrop-blur-xl px-6 py-3 rounded-2xl text-white font-kids text-xl shadow-lg border-2 border-white/50">
+            <div className="absolute bottom-2 left-2 right-2 bg-black/50 backdrop-blur-sm rounded-lg py-1 px-2 text-[10px] text-white font-bold truncate">
               {p.name}
             </div>
-          </div>
+          </button>
         ))}
-        
         {participants.length === 0 && (
-          <div className="relative rounded-[3rem] overflow-hidden bg-yellow-100 border-8 border-white border-dashed flex flex-col items-center justify-center p-12 text-center">
-            <span className="text-9xl mb-8 floating">🌈</span>
-            <h3 className="text-3xl font-kids text-yellow-600 mb-4">Waiting for friends!</h3>
-            <p className="text-yellow-700 font-bold text-xl">Tell someone to join the party on another device!</p>
+          <div className="flex-1 flex items-center justify-center text-white/30 font-bold uppercase tracking-widest text-xs">
+            No one else is here yet...
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-6 p-8 bg-white/90 backdrop-blur-3xl rounded-[3.5rem] shadow-2xl border-4 border-white mb-6">
-        <button onClick={toggleMute} className={`w-20 h-20 flex items-center justify-center text-4xl rounded-3xl transition-all shadow-xl border-b-8 active:border-b-0 active:translate-y-2 ${isMuted ? 'bg-red-500 text-white border-red-800' : 'bg-blue-100 text-blue-600 border-blue-200 hover:bg-blue-200'}`}>
+      {/* Control Bar */}
+      <div className="p-6 flex items-center justify-center gap-4 bg-white/5 border-t border-white/10">
+        <button onClick={toggleMute} className={`w-14 h-14 flex items-center justify-center text-2xl rounded-2xl transition-all ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
           {isMuted ? '🔇' : '🎤'}
         </button>
-        <button onClick={toggleVideo} className={`w-20 h-20 flex items-center justify-center text-4xl rounded-3xl transition-all shadow-xl border-b-8 active:border-b-0 active:translate-y-2 ${isVideoOff ? 'bg-red-500 text-white border-red-800' : 'bg-pink-100 text-pink-600 border-pink-200 hover:bg-pink-200'}`}>
+        <button onClick={toggleVideo} className={`w-14 h-14 flex items-center justify-center text-2xl rounded-2xl transition-all ${isVideoOff ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
           {isVideoOff ? '🚫' : '📹'}
         </button>
-        <button className="px-12 h-20 bg-gradient-to-r from-red-500 to-pink-500 text-white font-kids text-2xl rounded-3xl shadow-2xl hover:scale-105 transition-all border-b-8 border-red-800 active:border-b-0 active:translate-y-2">
-          End Party 👋
+        <button 
+          onClick={() => window.location.hash = '/'}
+          className="px-8 h-14 bg-red-500 text-white font-kids text-lg rounded-2xl shadow-xl hover:bg-red-600 active:scale-95 transition-all"
+        >
+          Leave Party 👋
         </button>
       </div>
     </div>
