@@ -55,9 +55,9 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-100 to-blue-100 p-4 overflow-hidden fixed inset-0">
       <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl max-w-md w-full text-center border-8 border-yellow-300 transform transition-transform hover:scale-[1.01]">
-        <h1 className="text-5xl font-kids text-blue-500 mb-6 drop-shadow-sm">Waga<span className="text-pink-500">chat!</span></h1>
-        <div className="text-7xl mb-8 floating">🌈</div>
-        <p className="text-gray-600 font-bold mb-8 text-2xl">What's your name, explorer?</p>
+        <h1 className="text-4xl md:text-5xl font-kids text-blue-500 mb-4 drop-shadow-sm">Waga<span className="text-pink-500">chat!</span></h1>
+        <div className="text-6xl mb-6 floating">🌈</div>
+        <p className="text-gray-600 font-bold mb-6 text-xl md:text-2xl">What's your name, explorer?</p>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <input
@@ -65,7 +65,7 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Type your name..."
-            className="w-full text-center p-5 text-3xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none transition-all text-blue-600 placeholder-blue-100"
+            className="w-full text-center p-4 text-2xl md:text-3xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none transition-all text-blue-600 placeholder-blue-100"
             maxLength={12}
             autoFocus
             disabled={isRegistering}
@@ -74,7 +74,7 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
           <button
             type="submit"
             disabled={!name.trim() || isRegistering}
-            className={`w-full font-kids text-3xl py-5 rounded-3xl shadow-lg transform active:scale-95 transition-all disabled:opacity-50 ${isRegistering ? 'bg-gray-400' : 'bg-pink-500 hover:bg-pink-600 text-white'}`}
+            className={`w-full font-kids text-2xl md:text-3xl py-4 rounded-3xl shadow-lg transform active:scale-95 transition-all disabled:opacity-50 ${isRegistering ? 'bg-gray-400' : 'bg-pink-500 hover:bg-pink-600 text-white'}`}
           >
             {statusText}
           </button>
