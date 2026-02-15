@@ -27,7 +27,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <div className="flex h-screen bg-[#FFF9E6] overflow-hidden relative">
+      <div className="flex h-screen h-[100dvh] bg-[#FFF9E6] overflow-hidden relative">
         {/* Sidebar - Responsive Overlay for Mobile, Sidebar for Desktop */}
         <div 
           className={`
@@ -56,8 +56,8 @@ const App: React.FC = () => {
         <div className="flex-1 flex flex-col min-w-0 h-full relative">
           <Header onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)} userName={userName} />
           
-          <main className="flex-1 overflow-hidden p-3 md:p-8 bg-gradient-to-br from-yellow-50 via-pink-50 to-blue-50">
-            <div className="h-full max-w-6xl mx-auto overflow-y-auto custom-scrollbar">
+          <main className="flex-1 overflow-hidden p-2 md:p-8 bg-gradient-to-br from-yellow-50 via-pink-50 to-blue-50">
+            <div className="h-full max-w-6xl mx-auto overflow-hidden relative">
               <Routes>
                 <Route path="/" element={<Dashboard onOpenSearch={() => setSidebarOpen(true)} />} />
                 <Route path="/room/:id" element={<ChatWindow userName={userName} friends={friends} />} />

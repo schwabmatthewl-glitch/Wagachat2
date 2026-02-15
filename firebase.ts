@@ -4,13 +4,12 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase
 
 // PASTE YOUR REAL CONFIG BELOW THIS LINE
 const firebaseConfig = {
-  apiKey: "AIzaSyCtM7JonPKTecmq937kTbZ-MF6LIWPybvo",
-  authDomain: "wagachat-3a07e.firebaseapp.com",
-  projectId: "wagachat-3a07e",
-  storageBucket: "wagachat-3a07e.firebasestorage.app",
-  messagingSenderId: "310658829414",
-  appId: "1:310658829414:web:8fc0c1ca515d8d1987b1a7",
-  measurementId: "G-N01XLJQNQR"
+  apiKey: "AIzaSy...", // Your real API Key
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
 };
 
 const app = initializeApp(firebaseConfig);

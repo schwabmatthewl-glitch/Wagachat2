@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Wagachat!</title>
     <meta name="theme-color" content="#3B82F6">
     <meta name="mobile-web-app-capable" content="yes">
@@ -17,6 +17,11 @@
       body {
         font-family: 'Quicksand', sans-serif;
         background-color: #FDFCF0;
+        /* Prevent the "pull down to refresh" behavior on mobile */
+        overscroll-behavior-y: none;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
       }
       .font-kids {
         font-family: 'Fredoka One', cursive;
