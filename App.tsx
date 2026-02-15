@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { db } from './firebase.ts';
-import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import Header from './components/Header.tsx';
 import Sidebar from './components/Sidebar.tsx';
 import ChatWindow from './components/ChatWindow.tsx';
@@ -21,7 +21,6 @@ const AppContent: React.FC<{
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
 
-  // 1. Global Heartbeat to eliminate "Ghost Users" in the sidebar
   useEffect(() => {
     const userId = localStorage.getItem('wagachat_userId');
     if (!userId) return;
@@ -39,7 +38,7 @@ const AppContent: React.FC<{
     };
 
     updateHeartbeat();
-    const interval = setInterval(updateHeartbeat, 20000); // Every 20s
+    const interval = setInterval(updateHeartbeat, 20000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -66,12 +65,16 @@ const AppContent: React.FC<{
 
   return (
     <div className="flex h-screen h-[100dvh] bg-[#FFF9E6] overflow-hidden relative w-full">
-      {/* Sidebar logic fix: Removed any widths from the parent container when hidden to prevent Android cutoff */}
+      {/* 
+          Desktop Fix: The sidebar is now locked to a fixed width on desktop (md:w-80).
+          isSidebarOpen only affects mobile translate-x and mobile width.
+      */}
       <div 
         className={`
-          fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
-          ${isSidebarOpen ? 'translate-x-0 w-[85vw] md:w-[480px]' : '-translate-x-full w-0 md:translate-x-0 md:w-32'}
-          ${!isSidebarOpen ? 'pointer-events-none md:pointer-events-auto overflow-hidden' : ''}
+          fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out 
+          md:relative md:translate-x-0 md:w-80 lg:w-96
+          ${isSidebarOpen ? 'translate-x-0 w-[85vw]' : '-translate-x-full w-0'}
+          ${!isSidebarOpen ? 'pointer-events-none md:pointer-events-auto overflow-hidden' : 'pointer-events-auto'}
         `}
       >
         <Sidebar 
@@ -83,7 +86,6 @@ const AppContent: React.FC<{
         />
       </div>
 
-      {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
@@ -91,7 +93,6 @@ const AppContent: React.FC<{
         />
       )}
 
-      {/* Main Content Area: Ensure w-full and min-w-0 for flex layout */}
       <div className="flex-1 flex flex-col min-w-0 w-full h-full overflow-hidden relative">
         <Header onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)} userName={userName} />
         
@@ -105,7 +106,6 @@ const AppContent: React.FC<{
           </div>
         </main>
 
-        {/* Mobile Bottom Nav */}
         <nav className="md:hidden h-24 bg-white border-t-4 border-yellow-200 flex items-center justify-around shrink-0 z-30 px-4 rounded-t-[3rem] shadow-lg">
           <Link to="/" className="text-4xl p-3 hover:bg-yellow-50 rounded-2xl transition-colors">🏠</Link>
           <Link to="/room/main" className="text-4xl p-3 hover:bg-blue-50 rounded-2xl transition-colors relative">
