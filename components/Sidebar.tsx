@@ -10,9 +10,12 @@ interface Props {
   toggle: () => void;
   friends: Friend[];
   onAddFriend: (friend: Friend) => void;
+  hasUnread?: boolean;
 }
 
-const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
+const STALE_ONLINE_THRESHOLD = 60000; // 60 seconds of inactivity = offline/ghost
+
+const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend, hasUnread }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Friend[]>([]);
@@ -22,17 +25,24 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const users: Friend[] = [];
       const currentUserId = localStorage.getItem('wagachat_userId');
+      const now = Date.now();
       
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.id !== currentUserId) {
-          users.push({
-            id: data.id,
-            name: data.name,
-            avatar: data.avatar,
-            status: data.status,
-            color: data.color || 'bg-blue-400'
-          });
+          // Check staleness here to prevent ghosts in the sidebar
+          const lastSeen = data.lastSeen || 0;
+          const isActuallyOnline = (now - lastSeen) < STALE_ONLINE_THRESHOLD;
+          
+          if (isActuallyOnline) {
+            users.push({
+              id: data.id,
+              name: data.name,
+              avatar: data.avatar,
+              status: 'online',
+              color: data.color || 'bg-blue-400'
+            });
+          }
         }
       });
       setOnlineUsers(users);
@@ -49,12 +59,12 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
 
   const navItems = [
     { path: '/', name: 'Home Adventure', icon: '🏠', color: 'blue' },
-    { path: '/room/main', name: 'Chat Clubhouse', icon: '💬', color: 'blue' },
+    { path: '/room/main', name: 'Chat Clubhouse', icon: '💬', color: 'blue', notify: hasUnread },
     { path: '/video', name: 'Live Video Party', icon: '📹', color: 'pink' },
   ];
 
   return (
-    <div className={`h-full bg-white border-r-8 border-yellow-100 flex flex-col transition-all duration-300 ${isOpen ? 'p-8' : 'p-4 items-center'}`}>
+    <div className={`h-full bg-white border-r-8 border-yellow-100 flex flex-col transition-all duration-300 pointer-events-auto ${isOpen ? 'p-8' : 'p-4 items-center'}`}>
       <div className="mb-12">
         <h2 className={`font-kids text-blue-500 mb-8 flex items-center gap-3 ${isOpen ? 'text-2xl' : 'hidden'}`}>
           <span>🚀 Explore</span>
@@ -70,7 +80,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
                 if (item.color === 'pink') colorClass = 'bg-pink-500';
                 
                 return `
-                  flex items-center gap-6 p-5 rounded-[2.5rem] transition-all
+                  flex items-center gap-6 p-5 rounded-[2.5rem] transition-all relative
                   ${isActive 
                     ? `${colorClass} text-white shadow-2xl scale-105` 
                     : 'hover:bg-yellow-50 text-gray-600 border-2 border-transparent hover:border-yellow-200'}
@@ -79,6 +89,9 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, friends, onAddFriend }) => {
             >
               <span className="text-4xl">{item.icon}</span>
               {isOpen && <span className="font-kids text-xl tracking-wide">{item.name}</span>}
+              {item.notify && (
+                <span className="absolute top-2 right-2 w-5 h-5 bg-pink-500 border-4 border-white rounded-full animate-bounce shadow-md"></span>
+              )}
             </NavLink>
           ))}
         </div>

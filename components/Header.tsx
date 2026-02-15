@@ -19,7 +19,7 @@ const Header: React.FC<Props> = ({ onToggleSidebar, userName }) => {
         <div className="flex items-center gap-3">
           <div className="text-5xl drop-shadow-sm">🎈</div>
           <h1 className="text-3xl md:text-5xl font-kids text-blue-500 tracking-tighter select-none">
-            Wagachat<span className="text-pink-500">!</span>
+            Waga<span className="text-pink-500">chat!</span>
           </h1>
         </div>
       </div>

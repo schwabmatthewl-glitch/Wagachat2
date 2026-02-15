@@ -1,11 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { db } from '../firebase.ts';
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   onStart: (name: string) => void;
 }
+
+const USER_COLORS = [
+  'bg-blue-400', 'bg-pink-400', 'bg-purple-400', 
+  'bg-orange-400', 'bg-green-400', 'bg-yellow-500', 
+  'bg-red-400', 'bg-indigo-400'
+];
 
 const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
   const [name, setName] = useState('');
@@ -19,31 +25,27 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
       setIsRegistering(true);
       setStatusText("Connecting... ☁️");
       
-      // Safety timeout in case Firebase is misconfigured
-      const timeoutId = setTimeout(() => {
-        setIsRegistering(false);
-        setStatusText("Let's Go! 🚀");
-        alert("The cloud is taking too long! ⛈️ Check your Firebase keys in firebase.ts!");
-      }, 10000);
-
       try {
         const userId = `user_${Date.now()}`;
+        const userColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+        const userAvatar = ['🐶', '🐱', '🦁', '🦖', '🐰', '🐼', '🦄', '🦊'][Math.floor(Math.random() * 8)];
+        
         await setDoc(doc(db, "users", userId), {
           id: userId,
           name: trimmedName,
-          avatar: ['🐶', '🐱', '🦁', '🦖', '🐰', '🐼'][Math.floor(Math.random() * 6)],
+          avatar: userAvatar,
           status: 'online',
-          color: 'bg-blue-400',
-          lastSeen: new Date()
+          color: userColor,
+          lastSeen: Date.now()
         });
         
-        clearTimeout(timeoutId);
         localStorage.setItem('wagachat_userId', userId);
+        localStorage.setItem('wagachat_userColor', userColor);
+        localStorage.setItem('wagachat_userAvatar', userAvatar);
         onStart(trimmedName);
       } catch (error: any) {
-        clearTimeout(timeoutId);
         console.error("Firebase Error:", error);
-        alert(`Cloud Error: ${error.message || 'Check your internet and Firebase setup!'}`);
+        alert(`Cloud Error: ${error.message || 'Check your internet!'}`);
         setIsRegistering(false);
         setStatusText("Let's Go! 🚀");
       }
@@ -53,7 +55,7 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-100 to-blue-100 p-4 overflow-hidden fixed inset-0">
       <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl max-w-md w-full text-center border-8 border-yellow-300 transform transition-transform hover:scale-[1.01]">
-        <h1 className="text-5xl font-kids text-blue-500 mb-6 drop-shadow-sm">Wagachat!</h1>
+        <h1 className="text-5xl font-kids text-blue-500 mb-6 drop-shadow-sm">Waga<span className="text-pink-500">chat!</span></h1>
         <div className="text-7xl mb-8 floating">🌈</div>
         <p className="text-gray-600 font-bold mb-8 text-2xl">What's your name, explorer?</p>
         
@@ -77,9 +79,6 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
             {statusText}
           </button>
         </form>
-        {isRegistering && (
-          <p className="mt-4 text-blue-400 font-bold animate-pulse text-sm">Talking to the stars... ✨</p>
-        )}
       </div>
     </div>
   );

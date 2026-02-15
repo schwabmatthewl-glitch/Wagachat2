@@ -10,8 +10,8 @@ interface Props {
   friends: Friend[];
 }
 
-// Fun Kid-Friendly Sounds
-const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3'; // Pop
+// Optimized sound for "shooop" effect
+const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/1471/1471-preview.mp3'; // Fast Whoosh
 const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; // Magic Ding
 
 const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
@@ -21,8 +21,6 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
   const isFirstLoad = useRef(true);
   
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Audio references
   const sendAudio = useRef(new Audio(SEND_SOUND_URL));
   const receiveAudio = useRef(new Audio(RECEIVE_SOUND_URL));
 
@@ -54,6 +52,7 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
           id: doc.id,
           sender: isFromMe ? 'user' : 'friend',
           senderName: data.senderName,
+          senderColor: data.senderColor || 'bg-blue-400',
           text: data.text,
           avatar: data.avatar,
           timestamp: data.timestamp?.toDate() || new Date(),
@@ -81,16 +80,18 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
   const handleSend = async (image?: string) => {
     if (!inputText.trim() && !image) return;
     const currentUserId = localStorage.getItem('wagachat_userId');
+    const userColor = localStorage.getItem('wagachat_userColor') || 'bg-blue-400';
+    const userAvatar = localStorage.getItem('wagachat_userAvatar') || '🌟';
     
     try {
-      // Play send sound immediately
       sendAudio.current.play().catch(() => {});
       
       await addDoc(collection(db, "messages"), {
         senderId: currentUserId,
         senderName: userName,
+        senderColor: userColor,
         text: inputText,
-        avatar: '🌟',
+        avatar: userAvatar,
         timestamp: Timestamp.now(),
         imageUrl: image || null,
       });
@@ -107,15 +108,17 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
 
   return (
     <div className="h-full flex flex-col bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative">
-      {/* Message List */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex items-end gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-3xl md:text-4xl shadow-md border-2 border-white flex-shrink-0 ${msg.sender === 'user' ? 'bg-blue-400' : 'bg-pink-400'}`}>
+            <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-3xl md:text-4xl shadow-md border-2 border-white flex-shrink-0 ${msg.senderColor}`}>
               {msg.avatar}
             </div>
             <div className={`max-w-[85%] md:max-w-[75%]`}>
-              <div className={`text-base font-black mb-1 px-2 uppercase ${msg.sender === 'user' ? 'text-blue-500 text-right' : 'text-pink-500 text-left'}`}>
+              <div 
+                className={`text-base font-black mb-1 px-2 uppercase tracking-wider ${msg.sender === 'user' ? 'text-right' : 'text-left'}`}
+                style={{ color: msg.senderColor.includes('blue') ? '#3B82F6' : msg.senderColor.includes('pink') ? '#EC4899' : msg.senderColor.includes('purple') ? '#A855F7' : msg.senderColor.includes('orange') ? '#FB923C' : msg.senderColor.includes('green') ? '#22C55E' : '#EAB308' }}
+              >
                 {msg.senderName}
               </div>
               <div className={`p-5 md:p-7 rounded-[2rem] text-2xl md:text-3xl font-bold shadow-sm leading-snug ${msg.sender === 'user' ? 'bg-blue-500 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
@@ -127,7 +130,6 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
         ))}
       </div>
 
-      {/* Input Area - Positioned carefully for mobile visibility */}
       <div className="p-4 bg-yellow-50 border-t-4 border-yellow-100 shrink-0 z-20">
         <div className="relative flex flex-col gap-3">
           {showEmojiPicker && (
