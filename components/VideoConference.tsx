@@ -180,7 +180,6 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     }
   };
 
-  // Determine grid columns
   const getGridCols = (count: number) => {
     if (count <= 1) return 'grid-cols-1';
     if (count <= 2) return 'grid-cols-1 md:grid-cols-2';
@@ -191,7 +190,6 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
 
   return (
     <div className="h-full flex flex-col relative bg-gray-950 rounded-[3rem] overflow-hidden">
-      {/* Main Grid View */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
         <div className={`grid gap-4 md:gap-6 w-full h-full ${getGridCols(participants.length)}`}>
           {participants.length === 0 ? (
@@ -216,7 +214,10 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
                     <span className="text-white font-bold text-sm uppercase mt-2">Connecting to {p.name}...</span>
                   </div>
                 )}
-                <div className="absolute bottom-4 left-4 right-4 bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl text-white font-kids text-lg border-2 border-white/20 truncate">
+                {/* Removed translucent background and border to avoid obscuring faces */}
+                <div 
+                  className="absolute bottom-4 left-4 right-4 text-yellow-300 font-kids text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,1)] truncate"
+                >
                   {p.name}
                 </div>
               </div>
@@ -225,7 +226,6 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         </div>
       </div>
 
-      {/* Selfie View - Smaller and Floating top-left */}
       <div className="absolute top-6 left-6 w-28 h-40 md:w-36 md:h-52 rounded-2xl md:rounded-3xl overflow-hidden border-4 border-white shadow-2xl z-20 bg-gray-800 pointer-events-none">
         <video 
           ref={localVideoRef} 
@@ -237,10 +237,11 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         {isVideoOff && (
           <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-3xl">🌟</div>
         )}
-        <div className="absolute bottom-1 left-1 right-1 bg-blue-500/80 backdrop-blur-sm text-white px-2 py-0.5 rounded-lg text-[10px] font-black uppercase text-center">ME</div>
+        <div className="absolute bottom-2 left-0 right-0 text-white font-black text-[12px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">
+          ME
+        </div>
       </div>
 
-      {/* Footer Controls */}
       <div className="p-4 md:p-6 flex items-center justify-center gap-4 bg-white/5 border-t border-white/10 shrink-0 z-30">
         <button onClick={toggleMute} className={`w-14 h-14 flex items-center justify-center text-2xl rounded-2xl transition-all shadow-lg ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
           {isMuted ? '🔇' : '🎤'}
