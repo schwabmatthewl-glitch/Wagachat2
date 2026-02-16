@@ -18,21 +18,15 @@ const AppContent: React.FC<{
 }> = ({ user, onLogout }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
-  const [myFriends, setMyFriends] = useState<Friend[]>([]);
   const location = useLocation();
 
   useEffect(() => {
     if (!user?.id) return;
 
-    // Heartbeat & Sync Friends List from DB
+    // Heartbeat & Sync
     const userRef = doc(db, "users", user.id);
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Here we would typically fetch the details of each friend ID
-        // For simplicity in this demo, we use the IDs to filter the online users list in Sidebar
-        // or maintain a persistent list stored in the user profile
-      }
+      // Logic to sync profile data if needed
     });
 
     const updateHeartbeat = async () => {
@@ -86,7 +80,7 @@ const AppContent: React.FC<{
           <div className="h-full w-full max-w-[1400px] mx-auto overflow-hidden relative">
             <Routes>
               <Route path="/" element={<Dashboard onOpenSearch={() => setSidebarOpen(true)} />} />
-              <Route path="/room/:id" element={<ChatWindow userName={user.name} />} />
+              <Route path="/room/:id" element={<ChatWindow user={user} />} />
               <Route path="/video" element={<VideoConference userName={user.name} />} />
               <Route path="/settings" element={<Settings user={user} onLogout={onLogout} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
