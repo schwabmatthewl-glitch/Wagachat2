@@ -1,10 +1,9 @@
-
-const CACHE_NAME = 'wagachat-v4';
+const CACHE_NAME = 'wagachat-v6';
 const ASSETS = [
   '/',
-  'index.html',
-  'manifest.json',
-  'icon.svg'
+  '/index.html',
+  '/manifest.json',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,12 +27,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
   // Handle navigation requests (opening the app)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        // Serve root from cache if network fails
-        return caches.match('/') || caches.match('index.html');
+        return caches.match('/') || caches.match('/index.html');
       })
     );
     return;
