@@ -80,7 +80,7 @@ const AppContent: React.FC<{
       )}
 
       <div className="flex-1 flex flex-col min-w-0 w-full h-full overflow-hidden relative">
-        <Header onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)} userName={user.name} />
+        <Header onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)} user={user} />
         
         <main className="flex-1 overflow-hidden p-2 md:p-8 bg-gradient-to-br from-yellow-50 via-pink-50 to-blue-50 relative w-full">
           <div className="h-full w-full max-w-[1400px] mx-auto overflow-hidden relative">
