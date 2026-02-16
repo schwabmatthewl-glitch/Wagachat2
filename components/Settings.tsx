@@ -11,11 +11,13 @@ interface Props {
 const Settings: React.FC<Props> = ({ user, onLogout }) => {
   const [name, setName] = useState(user.name);
   const [password, setPassword] = useState(user.password);
-  // localPhotoUrl handles the "draft" state to prevent background resets
   const [localPhotoUrl, setLocalPhotoUrl] = useState(user.photoUrl || '');
   const [friends, setFriends] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  
+  // Track if we are currently in the middle of a photo change to prevent sync overwrite
+  const isEditingPhoto = useRef(false);
   const hasLoadedInitial = useRef(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -29,8 +31,8 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
         setName(data.name);
         setPassword(data.password);
         
-        // Only update local photo if we haven't started editing or if it's the first load
-        if (!hasLoadedInitial.current) {
+        // Only update local photo from DB if we aren't currently editing it
+        if (!isEditingPhoto.current || !hasLoadedInitial.current) {
           setLocalPhotoUrl(data.photoUrl || '');
           hasLoadedInitial.current = true;
         }
@@ -55,6 +57,7 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
         password,
         photoUrl: localPhotoUrl
       });
+      isEditingPhoto.current = false; // Reset editing flag after successful save
       alert("Settings saved! ✨");
     } catch (e) {
       alert("Error saving! ☁️");
@@ -85,12 +88,12 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
       canvas.height = 400;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Center crop
         const startX = (video.videoWidth - size) / 2;
         const startY = (video.videoHeight - size) / 2;
         ctx.drawImage(video, startX, startY, size, size, 0, 0, 400, 400);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         setLocalPhotoUrl(dataUrl);
+        isEditingPhoto.current = true; // Mark as editing to prevent sync reset
         stopCamera();
       }
     }
@@ -122,6 +125,7 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
               const startY = (img.height - size) / 2;
               ctx.drawImage(img, startX, startY, size, size, 0, 0, 400, 400);
               setLocalPhotoUrl(canvas.toDataURL('image/jpeg', 0.8));
+              isEditingPhoto.current = true;
             }
           }
         };
@@ -139,6 +143,11 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleRemovePhoto = () => {
+    setLocalPhotoUrl('');
+    isEditingPhoto.current = true;
   };
 
   return (
@@ -175,7 +184,7 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
               </button>
               {localPhotoUrl && (
                 <button 
-                  onClick={() => setLocalPhotoUrl('')}
+                  onClick={handleRemovePhoto}
                   className="bg-red-100 text-red-600 px-6 py-2 rounded-2xl font-bold hover:bg-red-200"
                 >
                   Remove Photo ✖

@@ -53,6 +53,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
         const isFromMe = data.senderId === user.id;
         msgs.push({
           id: doc.id,
+          senderId: data.senderId, // Keep original sender ID for comparison
           sender: isFromMe ? 'user' : 'friend',
           senderName: data.senderName,
           senderColor: data.senderColor || 'bg-blue-400',
@@ -60,7 +61,6 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           avatar: data.avatar,
           timestamp: data.timestamp?.toDate() || new Date(),
           imageUrl: data.imageUrl,
-          // Support for custom photos in existing messages
           photoUrl: data.photoUrl
         } as any);
       });
@@ -94,7 +94,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
         senderColor: user.color,
         text: inputText,
         avatar: user.avatar,
-        photoUrl: user.photoUrl || null, // Include user's custom photo if set
+        photoUrl: user.photoUrl || null,
         timestamp: Timestamp.now(),
         imageUrl: image || null,
       });
@@ -145,37 +145,41 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   return (
     <div className="h-full flex flex-col bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
-        {messages.map((msg: any) => (
-          <div key={msg.id} className={`flex items-start gap-4 md:gap-6 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            {/* 2.5x Larger Icon: w-12->w-32, md:w-16->md:w-40 */}
-            <div className={`w-28 h-28 md:w-36 md:h-36 rounded-[2rem] flex items-center justify-center text-5xl md:text-6xl shadow-xl border-4 border-white flex-shrink-0 overflow-hidden ${msg.senderColor}`}>
-              {msg.photoUrl ? (
-                <img src={msg.photoUrl} className="w-full h-full object-cover" alt={msg.senderName} />
-              ) : (
-                msg.avatar
-              )}
-            </div>
-            <div className={`max-w-[70%] md:max-w-[60%] flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-              <div 
-                className={`text-[12px] md:text-base font-black mb-2 px-2 uppercase tracking-wider`}
-                style={{ color: msg.senderColor.includes('blue') ? '#3B82F6' : msg.senderColor.includes('pink') ? '#EC4899' : msg.senderColor.includes('purple') ? '#A855F7' : msg.senderColor.includes('orange') ? '#FB923C' : msg.senderColor.includes('green') ? '#22C55E' : '#EAB308' }}
-              >
-                {msg.senderName}
+        {messages.map((msg: any) => {
+          // Fallback logic: If it's "Me", always use my current live photo URL
+          const currentPhoto = msg.sender === 'user' ? user.photoUrl : msg.photoUrl;
+          
+          return (
+            <div key={msg.id} className={`flex items-start gap-4 md:gap-6 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`w-28 h-28 md:w-36 md:h-36 rounded-[2rem] flex items-center justify-center text-5xl md:text-6xl shadow-xl border-4 border-white flex-shrink-0 overflow-hidden ${msg.senderColor}`}>
+                {currentPhoto ? (
+                  <img src={currentPhoto} className="w-full h-full object-cover" alt={msg.senderName} />
+                ) : (
+                  msg.avatar
+                )}
               </div>
-              <div 
-                className={`
-                  p-5 md:p-8 rounded-[2rem] md:rounded-[2.5rem] text-lg md:text-2xl font-bold shadow-sm leading-snug 
-                  ${msg.sender === 'user' 
-                    ? 'bg-blue-600 text-white rounded-tr-none' 
-                    : `${msg.senderColor} text-white rounded-tl-none shadow-md`}
-                `}
-              >
-                {msg.imageUrl && <img src={msg.imageUrl} className="mb-4 rounded-3xl max-h-80 w-full object-cover border-4 border-white/20 shadow-lg" alt="shared" />}
-                {formatMessageText(msg.text)}
+              <div className={`max-w-[70%] md:max-w-[60%] flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                <div 
+                  className={`text-[12px] md:text-base font-black mb-2 px-2 uppercase tracking-wider`}
+                  style={{ color: msg.senderColor.includes('blue') ? '#3B82F6' : msg.senderColor.includes('pink') ? '#EC4899' : msg.senderColor.includes('purple') ? '#A855F7' : msg.senderColor.includes('orange') ? '#FB923C' : msg.senderColor.includes('green') ? '#22C55E' : '#EAB308' }}
+                >
+                  {msg.senderName}
+                </div>
+                <div 
+                  className={`
+                    p-5 md:p-8 rounded-[2rem] md:rounded-[2.5rem] text-lg md:text-2xl font-bold shadow-sm leading-snug 
+                    ${msg.sender === 'user' 
+                      ? 'bg-blue-600 text-white rounded-tr-none' 
+                      : `${msg.senderColor} text-white rounded-tl-none shadow-md`}
+                  `}
+                >
+                  {msg.imageUrl && <img src={msg.imageUrl} className="mb-4 rounded-3xl max-h-80 w-full object-cover border-4 border-white/20 shadow-lg" alt="shared" />}
+                  {formatMessageText(msg.text)}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="p-3 md:p-4 bg-yellow-50 border-t-4 border-yellow-100 shrink-0 z-20">
