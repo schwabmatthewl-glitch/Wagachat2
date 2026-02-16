@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 interface Props {
   onToggleSidebar: () => void;
@@ -26,15 +27,15 @@ const Header: React.FC<Props> = ({ onToggleSidebar, userName }) => {
       
       <div className="flex items-center gap-5">
         <div className="flex flex-col items-end hidden sm:flex">
-          <span className="font-kids text-gray-700 text-xl tracking-wide">Welcome, {userName}!</span>
+          <span className="font-kids text-gray-700 text-xl tracking-wide">Hi, {userName}!</span>
           <span className="text-[10px] font-black text-green-500 uppercase tracking-[0.2em] flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-sm shadow-green-200"></span>
             Super Online
           </span>
         </div>
-        <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-pink-300 to-pink-500 rounded-3xl flex items-center justify-center text-4xl border-4 border-white shadow-xl hover:rotate-12 transition-transform cursor-pointer">
+        <Link to="/settings" className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-pink-300 to-pink-500 rounded-3xl flex items-center justify-center text-4xl border-4 border-white shadow-xl hover:rotate-12 transition-transform cursor-pointer">
           🌟
-        </div>
+        </Link>
       </div>
     </header>
   );
