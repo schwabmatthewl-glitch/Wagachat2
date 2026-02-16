@@ -84,7 +84,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
   };
 
   const navItems = [
-    { path: '/', name: 'Adventure', icon: '🏠', color: 'blue' },
+    { path: '/', name: 'Home Adventure', icon: '🏠', color: 'blue' },
     { path: '/room/main', name: 'Clubhouse', icon: '💬', color: 'blue', notify: hasUnread },
     { path: '/video', name: 'Video Party', icon: '📹', color: 'pink' },
     { path: '/settings', name: 'Settings', icon: '⚙️', color: 'purple' },

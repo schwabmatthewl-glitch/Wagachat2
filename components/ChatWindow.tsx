@@ -2,19 +2,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../firebase.ts';
 import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { Message, Friend } from '../types.ts';
+import { Message } from '../types.ts';
 import { EMOJIS } from '../constants.ts';
 
 interface Props {
-  userName: string;
-  friends: Friend[];
+  user: any;
 }
 
-// Extra soft swoosh sound
 const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/1105/1105-preview.mp3'; 
 const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; 
 
-const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
+const ChatWindow: React.FC<Props> = ({ user }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -26,7 +24,7 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
   const receiveAudio = useRef(new Audio(RECEIVE_SOUND_URL));
 
   useEffect(() => {
-    sendAudio.current.volume = 0.15; // Extremely gentle volume
+    sendAudio.current.volume = 0.15;
     receiveAudio.current.volume = 0.35;
   }, []);
 
@@ -39,13 +37,12 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs: Message[] = [];
-      const currentUserId = localStorage.getItem('wagachat_userId');
       let shouldPlayReceiveSound = false;
       
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
           const data = change.doc.data();
-          if (!isFirstLoad.current && data.senderId !== currentUserId) {
+          if (!isFirstLoad.current && data.senderId !== user.id) {
             shouldPlayReceiveSound = true;
           }
         }
@@ -53,7 +50,8 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
 
       snapshot.forEach((doc) => {
         const data = doc.data();
-        const isFromMe = data.senderId === currentUserId;
+        // Use user.id from props for persistent alignment comparison
+        const isFromMe = data.senderId === user.id;
         msgs.push({
           id: doc.id,
           sender: isFromMe ? 'user' : 'friend',
@@ -75,7 +73,7 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user.id]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -85,19 +83,16 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
 
   const handleSend = async (image?: string) => {
     if (!inputText.trim() && !image) return;
-    const currentUserId = localStorage.getItem('wagachat_userId');
-    const userColor = localStorage.getItem('wagachat_userColor') || 'bg-blue-400';
-    const userAvatar = localStorage.getItem('wagachat_userAvatar') || '🌟';
     
     try {
       sendAudio.current.play().catch(() => {});
       
       await addDoc(collection(db, "messages"), {
-        senderId: currentUserId,
-        senderName: userName,
-        senderColor: userColor,
+        senderId: user.id,
+        senderName: user.name,
+        senderColor: user.color,
         text: inputText,
-        avatar: userAvatar,
+        avatar: user.avatar,
         timestamp: Timestamp.now(),
         imageUrl: image || null,
       });
@@ -124,6 +119,29 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
     }
   };
 
+  // Function to render text with enlarged emojis
+  const formatMessageText = (text: string) => {
+    if (!text) return null;
+    // Regex matches emojis
+    const emojiRegex = /(\p{Emoji_Presentation})/gu;
+    const parts = text.split(emojiRegex);
+    
+    return parts.map((part, i) => {
+      if (emojiRegex.test(part)) {
+        return (
+          <span 
+            key={i} 
+            className="text-4xl md:text-6xl inline-block align-middle leading-none mx-0.5"
+            style={{ filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))' }}
+          >
+            {part}
+          </span>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   return (
     <div className="h-full flex flex-col bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth custom-scrollbar">
@@ -139,9 +157,16 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
               >
                 {msg.senderName}
               </div>
-              <div className={`p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] text-lg md:text-2xl font-bold shadow-sm leading-snug ${msg.sender === 'user' ? 'bg-blue-500 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
-                {msg.imageUrl && <img src={msg.imageUrl} className="mb-3 rounded-2xl max-h-64 w-full object-cover border-4 border-white/20" alt="cloud" />}
-                {msg.text}
+              <div 
+                className={`
+                  p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] text-lg md:text-2xl font-bold shadow-sm leading-snug 
+                  ${msg.sender === 'user' 
+                    ? 'bg-blue-600 text-white rounded-br-none' 
+                    : `${msg.senderColor} text-white rounded-bl-none shadow-md`}
+                `}
+              >
+                {msg.imageUrl && <img src={msg.imageUrl} className="mb-3 rounded-2xl max-h-64 w-full object-cover border-4 border-white/20" alt="shared" />}
+                {formatMessageText(msg.text)}
               </div>
             </div>
           </div>
@@ -164,7 +189,6 @@ const ChatWindow: React.FC<Props> = ({ userName, friends }) => {
             </div>
           )}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Added a flex wrapper for better alignment and visibility */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button 
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
