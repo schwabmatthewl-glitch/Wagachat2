@@ -11,10 +11,12 @@ interface Props {
 const Settings: React.FC<Props> = ({ user, onLogout }) => {
   const [name, setName] = useState(user.name);
   const [password, setPassword] = useState(user.password);
-  const [photoUrl, setPhotoUrl] = useState(user.photoUrl || '');
+  // localPhotoUrl handles the "draft" state to prevent background resets
+  const [localPhotoUrl, setLocalPhotoUrl] = useState(user.photoUrl || '');
   const [friends, setFriends] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const hasLoadedInitial = useRef(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -26,7 +28,13 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
         const data = docSnap.data();
         setName(data.name);
         setPassword(data.password);
-        setPhotoUrl(data.photoUrl || '');
+        
+        // Only update local photo if we haven't started editing or if it's the first load
+        if (!hasLoadedInitial.current) {
+          setLocalPhotoUrl(data.photoUrl || '');
+          hasLoadedInitial.current = true;
+        }
+
         const fIds = data.friendIds || [];
         const fList: any[] = [];
         for (const id of fIds) {
@@ -45,7 +53,7 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
       await updateDoc(doc(db, "users", user.id), {
         name,
         password,
-        photoUrl
+        photoUrl: localPhotoUrl
       });
       alert("Settings saved! ✨");
     } catch (e) {
@@ -82,7 +90,7 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
         const startY = (video.videoHeight - size) / 2;
         ctx.drawImage(video, startX, startY, size, size, 0, 0, 400, 400);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setPhotoUrl(dataUrl);
+        setLocalPhotoUrl(dataUrl);
         stopCamera();
       }
     }
@@ -113,7 +121,7 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
               const startX = (img.width - size) / 2;
               const startY = (img.height - size) / 2;
               ctx.drawImage(img, startX, startY, size, size, 0, 0, 400, 400);
-              setPhotoUrl(canvas.toDataURL('image/jpeg', 0.8));
+              setLocalPhotoUrl(canvas.toDataURL('image/jpeg', 0.8));
             }
           }
         };
@@ -146,8 +154,8 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
           
           <div className="flex flex-col items-center gap-4 py-4">
             <div className={`w-40 h-40 md:w-56 md:h-56 rounded-[2.5rem] flex items-center justify-center text-7xl md:text-8xl shadow-xl border-4 border-white overflow-hidden ${user.color}`}>
-              {photoUrl ? (
-                <img src={photoUrl} className="w-full h-full object-cover" alt="Profile" />
+              {localPhotoUrl ? (
+                <img src={localPhotoUrl} className="w-full h-full object-cover" alt="Profile" />
               ) : (
                 user.avatar
               )}
@@ -165,9 +173,9 @@ const Settings: React.FC<Props> = ({ user, onLogout }) => {
               >
                 Take a Selfie! 📸
               </button>
-              {photoUrl && (
+              {localPhotoUrl && (
                 <button 
-                  onClick={() => setPhotoUrl('')}
+                  onClick={() => setLocalPhotoUrl('')}
                   className="bg-red-100 text-red-600 px-6 py-2 rounded-2xl font-bold hover:bg-red-200"
                 >
                   Remove Photo ✖
