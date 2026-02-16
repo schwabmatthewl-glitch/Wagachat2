@@ -1,6 +1,7 @@
 
 export interface Message {
   id: string;
+  senderId: string;
   sender: 'user' | 'friend';
   text: string;
   timestamp: Date;
@@ -8,12 +9,17 @@ export interface Message {
   senderColor: string;
   avatar: string;
   imageUrl?: string;
+  photoUrl?: string;
+  fontFamily?: string;
+  fontSize?: 's' | 'm' | 'l';
+  textColor?: string;
 }
 
 export interface Friend {
   id: string;
   name: string;
   avatar: string;
+  photoUrl?: string;
   status: 'online' | 'offline';
   color: string;
 }
