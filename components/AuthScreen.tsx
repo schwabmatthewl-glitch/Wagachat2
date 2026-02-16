@@ -62,7 +62,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-100 to-blue-100 p-4 overflow-hidden fixed inset-0">
       <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl max-w-md w-full text-center border-8 border-yellow-300">
-        <h1 className="text-4xl md:text-5xl font-kids text-blue-500 mb-2">Waga<span className="text-pink-500">chat!</span></h1>
+        <h1 className="text-4xl md:text-5xl font-kids text-blue-500 mb-2 italic">Waga<span className="text-pink-500">chat!</span></h1>
         <div className="text-6xl mb-4 floating">🎈</div>
         
         <form onSubmit={handleSubmit} className="space-y-4">

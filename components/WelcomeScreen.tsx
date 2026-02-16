@@ -55,7 +55,7 @@ const WelcomeScreen: React.FC<Props> = ({ onStart }) => {
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-yellow-100 via-pink-100 to-blue-100 p-4 overflow-hidden fixed inset-0">
       <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl max-w-md w-full text-center border-8 border-yellow-300 transform transition-transform hover:scale-[1.01]">
-        <h1 className="text-4xl md:text-5xl font-kids text-blue-500 mb-4 drop-shadow-sm">Waga<span className="text-pink-500">chat!</span></h1>
+        <h1 className="text-4xl md:text-5xl font-kids text-blue-500 mb-4 drop-shadow-sm italic">Waga<span className="text-pink-500">chat!</span></h1>
         <div className="text-6xl mb-6 floating">🌈</div>
         <p className="text-gray-600 font-bold mb-6 text-xl md:text-2xl">What's your name, explorer?</p>
         
