@@ -2,6 +2,7 @@
 {
   "short_name": "Wagachat!",
   "name": "Wagachat!: Fun & Safe Chat",
+  "description": "A colorful and fun chat for kids.",
   "icons": [
     {
       "src": "icon.svg",
@@ -22,10 +23,10 @@
       "purpose": "maskable"
     }
   ],
-  "start_url": "./index.html",
-  "background_color": "#FFF9E6",
+  "start_url": "index.html",
   "display": "standalone",
-  "scope": "./",
+  "background_color": "#FFF9E6",
   "theme_color": "#3B82F6",
-  "description": "A colorful and fun human-only chat for kids."
+  "orientation": "portrait",
+  "scope": "./"
 }
