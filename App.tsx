@@ -14,8 +14,9 @@ import { Friend } from './types.ts';
 
 const AppContent: React.FC<{ 
   user: any,
+  setUser: (user: any) => void,
   onLogout: () => void
-}> = ({ user, onLogout }) => {
+}> = ({ user, setUser, onLogout }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
@@ -23,10 +24,15 @@ const AppContent: React.FC<{
   useEffect(() => {
     if (!user?.id) return;
 
-    // Heartbeat & Sync
     const userRef = doc(db, "users", user.id);
+    
+    // Sync local user state with database in real-time
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
-      // Logic to sync profile data if needed
+      if (docSnap.exists()) {
+        const newData = docSnap.data();
+        setUser(newData);
+        localStorage.setItem('wagachat_session', JSON.stringify(newData));
+      }
     });
 
     const updateHeartbeat = async () => {
@@ -134,7 +140,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <AppContent user={user} onLogout={handleLogout} />
+      <AppContent user={user} setUser={setUser} onLogout={handleLogout} />
     </Router>
   );
 };
