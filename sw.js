@@ -1,6 +1,7 @@
 
-const CACHE_NAME = 'wagachat-v3';
+const CACHE_NAME = 'wagachat-v4';
 const ASSETS = [
+  '/',
   'index.html',
   'manifest.json',
   'icon.svg'
@@ -9,8 +10,6 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Use cache.addAll with a try-catch for individual files if needed, 
-      // but here we use a clean list of base assets.
       return cache.addAll(ASSETS);
     })
   );
@@ -33,8 +32,8 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        // If network fails (or 404s in some environments), serve index.html from cache
-        return caches.match('index.html');
+        // Serve root from cache if network fails
+        return caches.match('/') || caches.match('index.html');
       })
     );
     return;
