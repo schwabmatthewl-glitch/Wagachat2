@@ -17,14 +17,14 @@ const STALE_ONLINE_THRESHOLD = 60000;
 const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [allUsers, setAllUsers] = useState<Friend[]>([]);
-  const [myFriends, setMyFriends] = useState<Friend[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [myFriends, setMyFriends] = useState<any[]>([]);
 
   useEffect(() => {
     // 1. Listen to all users for search/online status
     const q = query(collection(db, "users"), limit(50));
     const unsubAll = onSnapshot(q, (snapshot) => {
-      const users: Friend[] = [];
+      const users: any[] = [];
       const now = Date.now();
       snapshot.forEach((d) => {
         const data = d.data();
@@ -34,6 +34,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
             id: data.id,
             name: data.name,
             avatar: data.avatar,
+            photoUrl: data.photoUrl,
             status: isOnline ? 'online' : 'offline',
             color: data.color || 'bg-blue-400'
           });
@@ -42,12 +43,10 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
       setAllUsers(users);
     });
 
-    // 2. Listen to current user profile for friend list persistence
     const unsubMe = onSnapshot(doc(db, "users", userId), (docSnap) => {
       if (docSnap.exists()) {
         const myData = docSnap.data();
-        const friendIds = myData.friendIds || [];
-        // We'll filter allUsers later using these IDs
+        // Trigger friend list recalculation when my profile changes
       }
     });
 
@@ -57,8 +56,6 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
     };
   }, [userId]);
 
-  // Derive friends from all users based on profile's friendIds
-  // For the sake of real-time offline/online status, we filter the live `allUsers` array.
   useEffect(() => {
     const fetchFriends = async () => {
       const snap = await getDoc(doc(db, "users", userId));
@@ -141,7 +138,9 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
                 {searchResults.map(u => (
                   <div key={u.id} className="flex items-center justify-between p-3 hover:bg-pink-50 rounded-2xl">
                     <div className="flex items-center gap-3">
-                      <span className={`w-10 h-10 rounded-xl ${u.color} flex items-center justify-center text-xl`}>{u.avatar}</span>
+                      <span className={`w-10 h-10 rounded-xl ${u.color} flex items-center justify-center text-xl overflow-hidden`}>
+                        {u.photoUrl ? <img src={u.photoUrl} className="w-full h-full object-cover" /> : u.avatar}
+                      </span>
                       <span className="font-bold text-sm">{u.name}</span>
                     </div>
                     <button onClick={() => addFriend(u.id)} className="bg-pink-500 text-white rounded-lg px-2 py-1 font-bold">＋</button>
@@ -152,21 +151,26 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
           </div>
         )}
 
-        <div className="space-y-4 overflow-y-auto flex-1 pr-2 custom-scrollbar w-full">
+        <div className="space-y-6 overflow-y-auto flex-1 pr-2 custom-scrollbar w-full">
           {myFriends.length === 0 && showFullMenu && !isSearching && (
             <p className="text-center text-gray-400 font-bold p-4">Add some friends to start chatting! 🌟</p>
           )}
           {myFriends.map((friend) => (
-            <div key={friend.id} className={`flex items-center gap-4 p-4 rounded-[2rem] bg-white border-2 border-transparent hover:border-pink-200 transition-all ${!showFullMenu && 'justify-center'}`}>
-              <div className={`w-12 h-12 rounded-2xl ${friend.color} flex items-center justify-center text-2xl shadow-md border-2 border-white flex-shrink-0`}>
-                {friend.avatar}
+            <div key={friend.id} className={`flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 border-transparent hover:border-pink-200 transition-all ${!showFullMenu && 'justify-center'}`}>
+              {/* 2.5x Larger Icon: w-12->w-28 */}
+              <div className={`w-28 h-28 rounded-[2rem] ${friend.color} flex items-center justify-center text-5xl shadow-lg border-4 border-white flex-shrink-0 overflow-hidden`}>
+                {friend.photoUrl ? (
+                  <img src={friend.photoUrl} className="w-full h-full object-cover" alt={friend.name} />
+                ) : (
+                  friend.avatar
+                )}
               </div>
               {showFullMenu && (
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-800 text-lg truncate">{friend.name}</p>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${friend.status === 'online' ? 'bg-green-500' : 'bg-gray-300'}`} />
-                    <span className={`text-[10px] font-black uppercase ${friend.status === 'online' ? 'text-green-500' : 'text-gray-400'}`}>
+                  <p className="font-kids text-gray-800 text-2xl truncate">{friend.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`w-3.5 h-3.5 rounded-full ${friend.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                    <span className={`text-xs font-black uppercase tracking-widest ${friend.status === 'online' ? 'text-green-500' : 'text-gray-400'}`}>
                       {friend.status === 'online' ? 'Online' : 'Asleep'}
                     </span>
                   </div>
