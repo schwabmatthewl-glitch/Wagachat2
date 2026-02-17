@@ -9,7 +9,7 @@ interface Props {
 }
 
 const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/1105/1105-preview.mp3'; 
-const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; 
+const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; // Consistent Pop Sound
 
 const FONTS = [
   { name: 'Quicksand', family: "'Quicksand', sans-serif" },
@@ -51,7 +51,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
 
   useEffect(() => {
     sendAudio.current.volume = 0.15;
-    receiveAudio.current.volume = 0.35;
+    receiveAudio.current.volume = 0.4; // Slightly louder for better cross-device consistency
   }, []);
 
   const scrollToBottom = (instant = false) => {
@@ -152,16 +152,45 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     setInputText(prev => prev + emoji);
   };
 
+  // Improved Image Compression logic to fix Samsung S8/Older Android issues
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        handleSend(base64);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 800; // Cap resolution for Firestore compatibility
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height *= MAX_DIM / width;
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width *= MAX_DIM / height;
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.7); // Compress to 70% JPEG
+          handleSend(compressed);
+        }
       };
-      reader.readAsDataURL(file);
-    }
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // Reset input
   };
 
   const getFontSizeClass = (size?: string) => {
@@ -261,6 +290,20 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
                   <div className="flex flex-wrap gap-2">
                     {COLORS.map(c => (
                       <button key={c} onClick={() => setActiveColor(c)} className={`w-10 h-10 rounded-full border-4 shadow-sm transition-transform active:scale-90 ${activeColor === c ? 'border-gray-400 scale-110' : 'border-white'}`} style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="font-kids text-xl text-gray-400 mb-2">Size 📏</p>
+                  <div className="flex gap-2">
+                    {(['s', 'm', 'l'] as const).map(size => (
+                      <button 
+                        key={size} 
+                        onClick={() => setActiveSize(size)} 
+                        className={`w-12 h-12 rounded-xl border-4 font-black uppercase transition-all ${activeSize === size ? 'bg-blue-500 text-white border-blue-200' : 'bg-white text-blue-500 border-blue-50'}`}
+                      >
+                        {size}
+                      </button>
                     ))}
                   </div>
                 </div>

@@ -18,24 +18,8 @@ const servers = {
 const HEARTBEAT_INTERVAL = 6000; 
 const STALE_THRESHOLD = 15000;   
 
-// Helper to limit bitrate in the SDP
 const setMediaBitrate = (sdp: string, bitrate: number) => {
-  let lines = sdp.split('\r\n');
-  let lineIndex = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].indexOf('m=video') === 0) {
-      lineIndex = i;
-      break;
-    }
-  }
-  if (lineIndex === -1) return sdp;
-  
-  // Skip to the next line after m=video
-  lineIndex++;
-  
-  // Insert b=AS line
-  lines.splice(lineIndex, 0, 'b=AS:' + bitrate);
-  return lines.join('\r\n');
+  return sdp.replace(/m=video.*\r\n/g, `$&\r\nb=AS:${bitrate}\r\n`);
 };
 
 const VideoConference: React.FC<Props> = ({ userName }) => {
@@ -47,6 +31,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnections = useRef<{ [key: string]: RTCPeerConnection }>({});
+  const pendingCandidates = useRef<{ [key: string]: any[] }>({});
   const myId = localStorage.getItem('wagachat_userId') || `guest_${Date.now()}`;
 
   const cleanup = async () => {
@@ -58,23 +43,40 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     } catch (e) {}
   };
 
+  const processPendingCandidates = (otherId: string) => {
+    const pc = peerConnections.current[otherId];
+    if (pc && pc.remoteDescription && pendingCandidates.current[otherId]) {
+      pendingCandidates.current[otherId].forEach(candidate => {
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("Queued candidate error:", e));
+      });
+      delete pendingCandidates.current[otherId];
+    }
+  };
+
   useEffect(() => {
     let heartbeat: any;
 
     const startMedia = async () => {
       try {
-        // OPTIMIZATION: Reduced constraints for mobile/low-bandwidth devices
+        // Optimized for iOS compatibility: using ideal instead of exact constraints
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
-            width: { ideal: 320, max: 480 },
-            height: { ideal: 240, max: 360 },
+            width: { min: 320, ideal: 640, max: 1280 },
+            height: { min: 240, ideal: 480, max: 720 },
             frameRate: { ideal: 15, max: 20 }
           }, 
-          audio: true 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         });
         
         setLocalStream(stream);
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(() => {}); // Safety play for mobile
+        }
         
         const presenceRef = doc(db, 'video_presence', myId);
         const updatePresence = async () => {
@@ -96,25 +98,18 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
             const data = d.data();
             const isMe = data.id === myId;
             const isFresh = (now - (data.lastSeen || 0)) < STALE_THRESHOLD;
-            if (!isMe && isFresh) {
-              others.push(data);
-            }
+            if (!isMe && isFresh) others.push(data);
           });
           setParticipants(others);
         });
 
-        // OPTIMIZATION: Ignore calls older than 30 seconds to prevent "zombie" connections
-        const startTime = Date.now() - 30000;
-        const callsQuery = query(
-          collection(db, 'video_calls'),
-          where('to', '==', myId)
-        );
+        const startTime = Date.now() - 60000;
+        const callsQuery = query(collection(db, 'video_calls'), where('to', '==', myId));
 
         onSnapshot(callsQuery, async (snapshot) => {
           snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added') {
               const data = change.doc.data();
-              // Double check freshness and ensure we haven't connected yet
               if (data.timestamp?.toMillis() > startTime && !peerConnections.current[data.from]) {
                 await answerCall(change.doc.id, data.from, data.offer, stream);
               }
@@ -145,7 +140,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed' || pc.iceConnectionState === 'failed') {
         setRemoteStreams(prev => {
           const next = { ...prev };
           delete next[otherId];
@@ -171,31 +166,32 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
       if (event.candidate) addDoc(collection(callDoc, 'offerCandidates'), event.candidate.toJSON());
     };
 
-    let offerDescription = await pc.createOffer();
-    
-    // OPTIMIZATION: Munge SDP to cap bitrate at 250kbps
-    const mungedSdp = setMediaBitrate(offerDescription.sdp!, 250);
-    offerDescription = new RTCSessionDescription({ type: offerDescription.type, sdp: mungedSdp });
-    
-    await pc.setLocalDescription(offerDescription);
+    let offer = await pc.createOffer();
+    offer = new RTCSessionDescription({ type: offer.type, sdp: setMediaBitrate(offer.sdp!, 300) });
+    await pc.setLocalDescription(offer);
     
     await setDoc(callDoc, { 
-      from: myId, 
-      to: otherId, 
-      offer: { sdp: offerDescription.sdp, type: offerDescription.type },
-      timestamp: Timestamp.now()
+      from: myId, to: otherId, offer: { sdp: offer.sdp, type: offer.type }, timestamp: Timestamp.now()
     });
 
     onSnapshot(callDoc, (doc) => {
       const data = doc.data();
       if (!pc.currentRemoteDescription && data?.answer) {
-        pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+          .then(() => processPendingCandidates(otherId));
       }
     });
 
     onSnapshot(collection(callDoc, 'answerCandidates'), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+        if (change.type === 'added') {
+          const candidate = change.doc.data();
+          if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(candidate));
+          else {
+            if (!pendingCandidates.current[otherId]) pendingCandidates.current[otherId] = [];
+            pendingCandidates.current[otherId].push(candidate);
+          }
+        }
       });
     });
   };
@@ -209,22 +205,24 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     };
 
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    processPendingCandidates(fromId);
     
-    let answerDescription = await pc.createAnswer();
+    let answer = await pc.createAnswer();
+    answer = new RTCSessionDescription({ type: answer.type, sdp: setMediaBitrate(answer.sdp!, 300) });
+    await pc.setLocalDescription(answer);
     
-    // OPTIMIZATION: Munge SDP to cap bitrate at 250kbps
-    const mungedSdp = setMediaBitrate(answerDescription.sdp!, 250);
-    answerDescription = new RTCSessionDescription({ type: answerDescription.type, sdp: mungedSdp });
-    
-    await pc.setLocalDescription(answerDescription);
-    
-    await setDoc(callDoc, { 
-      answer: { type: answerDescription.type, sdp: answerDescription.sdp } 
-    }, { merge: true });
+    await setDoc(callDoc, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
 
     onSnapshot(collection(callDoc, 'offerCandidates'), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+        if (change.type === 'added') {
+          const candidate = change.doc.data();
+          if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(candidate));
+          else {
+            if (!pendingCandidates.current[fromId]) pendingCandidates.current[fromId] = [];
+            pendingCandidates.current[fromId].push(candidate);
+          }
+        }
       });
     });
   };
@@ -249,18 +247,10 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     }
   };
 
-  const getGridCols = (count: number) => {
-    if (count <= 1) return 'grid-cols-1';
-    if (count <= 2) return 'grid-cols-1 md:grid-cols-2';
-    if (count <= 4) return 'grid-cols-2';
-    if (count <= 6) return 'grid-cols-2 md:grid-cols-3';
-    return 'grid-cols-3';
-  };
-
   return (
     <div className="h-full flex flex-col relative bg-gray-950 rounded-[3rem] overflow-hidden">
       <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-        <div className={`grid gap-4 md:gap-6 w-full h-full max-w-4xl mx-auto ${getGridCols(participants.length)}`}>
+        <div className={`grid gap-4 md:gap-6 w-full h-full max-w-4xl mx-auto ${participants.length <= 1 ? 'grid-cols-1' : participants.length <= 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-2'}`}>
           {participants.length === 0 ? (
             <div className="col-span-full h-full flex flex-col items-center justify-center text-center space-y-4">
               <span className="text-8xl floating">🎈</span>
@@ -274,20 +264,15 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
                   <video 
                     autoPlay 
                     playsInline 
-                    className="w-full h-full object-cover"
-                    ref={el => { if (el) el.srcObject = remoteStreams[p.id]; }}
+                    className="w-full h-full object-cover" 
+                    ref={el => { if (el) { el.srcObject = remoteStreams[p.id]; el.play().catch(() => {}); } }} 
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-pink-500/20">
                     <span className="text-4xl animate-bounce">🎈</span>
-                    <span className="text-white font-bold text-sm uppercase mt-2">Connecting to {p.name}...</span>
                   </div>
                 )}
-                <div 
-                  className="absolute bottom-4 left-4 right-4 text-yellow-300 font-kids text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,1)] truncate"
-                >
-                  {p.name}
-                </div>
+                <div className="absolute bottom-4 left-4 right-4 text-yellow-300 font-kids text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,1)] truncate">{p.name}</div>
               </div>
             ))
           )}
@@ -300,14 +285,10 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           autoPlay 
           playsInline 
           muted 
-          className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity ${isVideoOff ? 'opacity-0' : 'opacity-100'}`}
+          className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity ${isVideoOff ? 'opacity-0' : 'opacity-100'}`} 
         />
-        {isVideoOff && (
-          <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-3xl">🌟</div>
-        )}
-        <div className="absolute bottom-2 left-0 right-0 text-white font-black text-[10px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">
-          ME
-        </div>
+        {isVideoOff && <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-3xl">🌟</div>}
+        <div className="absolute bottom-2 left-0 right-0 text-white font-black text-[10px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">ME</div>
       </div>
 
       <div className="p-4 md:p-6 flex items-center justify-center gap-4 bg-white/5 border-t border-white/10 shrink-0 z-30">
@@ -317,12 +298,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         <button onClick={toggleVideo} className={`w-14 h-14 flex items-center justify-center text-2xl rounded-2xl transition-all shadow-lg ${isVideoOff ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
           {isVideoOff ? '🚫' : '📹'}
         </button>
-        <button 
-          onClick={() => window.location.hash = '/'}
-          className="px-8 h-14 bg-red-500 text-white font-kids text-lg rounded-2xl shadow-xl hover:bg-red-600 active:scale-95 transition-all border-b-4 border-red-800 active:border-b-0"
-        >
-          Leave 👋
-        </button>
+        <button onClick={() => window.location.hash = '/'} className="px-8 h-14 bg-red-500 text-white font-kids text-lg rounded-2xl shadow-xl hover:bg-red-600 active:scale-95 transition-all border-b-4 border-red-800 active:border-b-0">Leave 👋</button>
       </div>
     </div>
   );
