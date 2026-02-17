@@ -27,6 +27,15 @@ const Dashboard: React.FC<Props> = ({ onOpenSearch }) => {
       emoji: '🎉'
     },
     {
+      title: 'AI Buddy',
+      desc: 'Talk to Sparky!',
+      icon: '🐶',
+      color: 'bg-yellow-400',
+      borderColor: 'border-yellow-600',
+      link: '/buddy',
+      emoji: '🦴'
+    },
+    {
       title: 'Find Friends',
       desc: 'Search now!',
       icon: '🔍',

@@ -51,7 +51,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
 
   useEffect(() => {
     sendAudio.current.volume = 0.15;
-    receiveAudio.current.volume = 0.4; // Slightly louder for better cross-device consistency
+    receiveAudio.current.volume = 0.4;
   }, []);
 
   const scrollToBottom = (instant = false) => {
@@ -152,7 +152,6 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     setInputText(prev => prev + emoji);
   };
 
-  // Improved Image Compression logic to fix Samsung S8/Older Android issues
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -162,7 +161,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_DIM = 800; // Cap resolution for Firestore compatibility
+        const MAX_DIM = 800;
         let width = img.width;
         let height = img.height;
 
@@ -183,14 +182,14 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.7); // Compress to 70% JPEG
+          const compressed = canvas.toDataURL('image/jpeg', 0.7);
           handleSend(compressed);
         }
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
-    e.target.value = ''; // Reset input
+    e.target.value = '';
   };
 
   const getFontSizeClass = (size?: string) => {

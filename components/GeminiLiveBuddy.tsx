@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
-// Implement audio encoding/decoding as requested in instructions
+// Manual implementation of audio encoding/decoding as required by guidelines
 function decode(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -51,8 +51,15 @@ const GeminiLiveBuddy: React.FC = () => {
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const streamRef = useRef<MediaStream | null>(null);
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
+  const currentTranscriptionRef = useRef('');
 
   const startSession = async () => {
+    // Check for API Key selection for paid projects as required by guidelines
+    if (typeof window.aistudio !== 'undefined' && !(await window.aistudio.hasSelectedApiKey())) {
+      await window.aistudio.openSelectKey();
+      // Proceed assuming key selection was successful to avoid race conditions
+    }
+
     setIsConnecting(true);
     // Create new GoogleGenAI instance right before call to ensure up-to-date config
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -85,23 +92,30 @@ const GeminiLiveBuddy: React.FC = () => {
                 data: encode(new Uint8Array(int16.buffer)),
                 mimeType: 'audio/pcm;rate=16000',
               };
-              // Crucial: send input only after session promise resolves
+              // Fix: Solely rely on sessionPromise resolves to send data
               sessionPromise.then(s => s.sendRealtimeInput({ media: pcmBlob }));
             };
             source.connect(scriptProcessor);
             scriptProcessor.connect(inputAudioContext.destination);
           },
           onmessage: async (message: LiveServerMessage) => {
-            // Handle Transcriptions
+            // Fix: Use Ref for transcription to prevent stale closures and follow async update guidelines
             if (message.serverContent?.outputTranscription) {
-              setCurrentTranscription(prev => prev + message.serverContent?.outputTranscription?.text);
+              const text = message.serverContent.outputTranscription.text || '';
+              currentTranscriptionRef.current += text;
+              setCurrentTranscription(currentTranscriptionRef.current);
             }
+            
             if (message.serverContent?.turnComplete) {
-               setTranscript(prev => [...prev, currentTranscription].filter(Boolean));
+               const fullText = currentTranscriptionRef.current;
+               if (fullText) {
+                 setTranscript(prev => [...prev, fullText].filter(Boolean));
+               }
+               currentTranscriptionRef.current = '';
                setCurrentTranscription('');
             }
 
-            // Handle Audio
+            // Handle Audio output bytes
             const audioBase64 = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
             if (audioBase64) {
               nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputAudioContext.currentTime);
@@ -109,6 +123,7 @@ const GeminiLiveBuddy: React.FC = () => {
               const source = outputAudioContext.createBufferSource();
               source.buffer = audioBuffer;
               source.connect(outputAudioContext.destination);
+              // Use precise start time tracking for gapless playback
               source.start(nextStartTimeRef.current);
               nextStartTimeRef.current += audioBuffer.duration;
               sourcesRef.current.add(source);
@@ -116,7 +131,9 @@ const GeminiLiveBuddy: React.FC = () => {
             }
 
             if (message.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => s.stop());
+              sourcesRef.current.forEach(s => {
+                try { s.stop(); } catch(e) {}
+              });
               sourcesRef.current.clear();
               nextStartTimeRef.current = 0;
             }
@@ -149,7 +166,7 @@ const GeminiLiveBuddy: React.FC = () => {
 
   const stopSession = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
-    // Properly close the session
+    // Release resources correctly
     sessionPromiseRef.current?.then(s => s.close());
     sessionPromiseRef.current = null;
     setIsActive(false);
@@ -200,7 +217,7 @@ const GeminiLiveBuddy: React.FC = () => {
         </button>
       )}
 
-      {/* Live Transcription Visualization */}
+      {/* Transcription View */}
       <div className="w-full bg-white/70 backdrop-blur rounded-[2.5rem] p-6 h-36 overflow-y-auto flex flex-col-reverse shadow-inner border-4 border-white custom-scrollbar">
         {currentTranscription && (
             <p className="text-blue-600 font-bold italic animate-pulse text-lg">Sparky: {currentTranscription}...</p>

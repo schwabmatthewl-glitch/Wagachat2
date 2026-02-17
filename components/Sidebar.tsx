@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { db } from '../firebase.ts';
@@ -71,6 +72,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
     { path: '/', name: 'Home Adventure', icon: '🏠', color: 'blue' },
     { path: '/room/main', name: 'Clubhouse', icon: '💬', color: 'blue', notify: hasUnread },
     { path: '/video', name: 'Video Party', icon: '📹', color: 'pink' },
+    { path: '/buddy', name: 'AI Buddy', icon: '🐶', color: 'yellow' },
     { path: '/settings', name: 'Settings', icon: '⚙️', color: 'purple' },
   ];
 
