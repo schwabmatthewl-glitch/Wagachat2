@@ -1,7 +1,6 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { db } from '../firebase.ts';
-import { collection, doc, setDoc, onSnapshot, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   userName: string;
@@ -18,6 +17,26 @@ const servers = {
 
 const HEARTBEAT_INTERVAL = 6000; 
 const STALE_THRESHOLD = 15000;   
+
+// Helper to limit bitrate in the SDP
+const setMediaBitrate = (sdp: string, bitrate: number) => {
+  let lines = sdp.split('\r\n');
+  let lineIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf('m=video') === 0) {
+      lineIndex = i;
+      break;
+    }
+  }
+  if (lineIndex === -1) return sdp;
+  
+  // Skip to the next line after m=video
+  lineIndex++;
+  
+  // Insert b=AS line
+  lines.splice(lineIndex, 0, 'b=AS:' + bitrate);
+  return lines.join('\r\n');
+};
 
 const VideoConference: React.FC<Props> = ({ userName }) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -44,7 +63,16 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
 
     const startMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        // OPTIMIZATION: Reduced constraints for mobile/low-bandwidth devices
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 320, max: 480 },
+            height: { ideal: 240, max: 360 },
+            frameRate: { ideal: 15, max: 20 }
+          }, 
+          audio: true 
+        });
+        
         setLocalStream(stream);
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
         
@@ -75,11 +103,19 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           setParticipants(others);
         });
 
-        onSnapshot(collection(db, 'video_calls'), async (snapshot) => {
+        // OPTIMIZATION: Ignore calls older than 30 seconds to prevent "zombie" connections
+        const startTime = Date.now() - 30000;
+        const callsQuery = query(
+          collection(db, 'video_calls'),
+          where('to', '==', myId)
+        );
+
+        onSnapshot(callsQuery, async (snapshot) => {
           snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added') {
               const data = change.doc.data();
-              if (data.to === myId && !peerConnections.current[data.from]) {
+              // Double check freshness and ensure we haven't connected yet
+              if (data.timestamp?.toMillis() > startTime && !peerConnections.current[data.from]) {
                 await answerCall(change.doc.id, data.from, data.offer, stream);
               }
             }
@@ -115,6 +151,10 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           delete next[otherId];
           return next;
         });
+        if (peerConnections.current[otherId]) {
+          peerConnections.current[otherId].close();
+          delete peerConnections.current[otherId];
+        }
       }
     };
 
@@ -126,16 +166,33 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     if (peerConnections.current[otherId] || !localStream) return;
     const pc = createPeerConnection(otherId, localStream);
     const callDoc = doc(collection(db, 'video_calls'));
+    
     pc.onicecandidate = (event) => {
       if (event.candidate) addDoc(collection(callDoc, 'offerCandidates'), event.candidate.toJSON());
     };
-    const offerDescription = await pc.createOffer();
+
+    let offerDescription = await pc.createOffer();
+    
+    // OPTIMIZATION: Munge SDP to cap bitrate at 250kbps
+    const mungedSdp = setMediaBitrate(offerDescription.sdp!, 250);
+    offerDescription = new RTCSessionDescription({ type: offerDescription.type, sdp: mungedSdp });
+    
     await pc.setLocalDescription(offerDescription);
-    await setDoc(callDoc, { from: myId, to: otherId, offer: { sdp: offerDescription.sdp, type: offerDescription.type } });
+    
+    await setDoc(callDoc, { 
+      from: myId, 
+      to: otherId, 
+      offer: { sdp: offerDescription.sdp, type: offerDescription.type },
+      timestamp: Timestamp.now()
+    });
+
     onSnapshot(callDoc, (doc) => {
       const data = doc.data();
-      if (!pc.currentRemoteDescription && data?.answer) pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+      if (!pc.currentRemoteDescription && data?.answer) {
+        pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+      }
     });
+
     onSnapshot(collection(callDoc, 'answerCandidates'), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
@@ -146,13 +203,25 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
   const answerCall = async (callId: string, fromId: string, offer: any, stream: MediaStream) => {
     const pc = createPeerConnection(fromId, stream);
     const callDoc = doc(db, 'video_calls', callId);
+    
     pc.onicecandidate = (event) => {
       if (event.candidate) addDoc(collection(callDoc, 'answerCandidates'), event.candidate.toJSON());
     };
+
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answerDescription = await pc.createAnswer();
+    
+    let answerDescription = await pc.createAnswer();
+    
+    // OPTIMIZATION: Munge SDP to cap bitrate at 250kbps
+    const mungedSdp = setMediaBitrate(answerDescription.sdp!, 250);
+    answerDescription = new RTCSessionDescription({ type: answerDescription.type, sdp: mungedSdp });
+    
     await pc.setLocalDescription(answerDescription);
-    await setDoc(callDoc, { answer: { type: answerDescription.type, sdp: answerDescription.sdp } }, { merge: true });
+    
+    await setDoc(callDoc, { 
+      answer: { type: answerDescription.type, sdp: answerDescription.sdp } 
+    }, { merge: true });
+
     onSnapshot(collection(callDoc, 'offerCandidates'), (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
@@ -191,7 +260,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
   return (
     <div className="h-full flex flex-col relative bg-gray-950 rounded-[3rem] overflow-hidden">
       <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-        <div className={`grid gap-4 md:gap-6 w-full h-full ${getGridCols(participants.length)}`}>
+        <div className={`grid gap-4 md:gap-6 w-full h-full max-w-4xl mx-auto ${getGridCols(participants.length)}`}>
           {participants.length === 0 ? (
             <div className="col-span-full h-full flex flex-col items-center justify-center text-center space-y-4">
               <span className="text-8xl floating">🎈</span>
@@ -214,7 +283,6 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
                     <span className="text-white font-bold text-sm uppercase mt-2">Connecting to {p.name}...</span>
                   </div>
                 )}
-                {/* Removed translucent background and border to avoid obscuring faces */}
                 <div 
                   className="absolute bottom-4 left-4 right-4 text-yellow-300 font-kids text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,1)] truncate"
                 >
@@ -226,7 +294,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         </div>
       </div>
 
-      <div className="absolute top-6 left-6 w-28 h-40 md:w-36 md:h-52 rounded-2xl md:rounded-3xl overflow-hidden border-4 border-white shadow-2xl z-20 bg-gray-800 pointer-events-none">
+      <div className="absolute top-6 left-6 w-20 h-28 md:w-24 md:h-34 rounded-2xl md:rounded-3xl overflow-hidden border-4 border-white shadow-2xl z-20 bg-gray-800 pointer-events-none">
         <video 
           ref={localVideoRef} 
           autoPlay 
@@ -237,7 +305,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         {isVideoOff && (
           <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-3xl">🌟</div>
         )}
-        <div className="absolute bottom-2 left-0 right-0 text-white font-black text-[12px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">
+        <div className="absolute bottom-2 left-0 right-0 text-white font-black text-[10px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">
           ME
         </div>
       </div>

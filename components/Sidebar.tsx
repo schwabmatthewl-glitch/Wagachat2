@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { db } from '../firebase.ts';
 import { doc, collection, onSnapshot, query, limit, updateDoc, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { Friend } from '../types.ts';
 
 interface Props {
   isOpen: boolean;
@@ -21,7 +19,6 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
   const [myFriends, setMyFriends] = useState<any[]>([]);
 
   useEffect(() => {
-    // 1. Listen to all users for search/online status
     const q = query(collection(db, "users"), limit(50));
     const unsubAll = onSnapshot(q, (snapshot) => {
       const users: any[] = [];
@@ -43,17 +40,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
       setAllUsers(users);
     });
 
-    const unsubMe = onSnapshot(doc(db, "users", userId), (docSnap) => {
-      if (docSnap.exists()) {
-        const myData = docSnap.data();
-        // Trigger friend list recalculation when my profile changes
-      }
-    });
-
-    return () => {
-      unsubAll();
-      unsubMe();
-    };
+    return () => unsubAll();
   }, [userId]);
 
   useEffect(() => {
@@ -97,7 +84,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
     : [];
 
   return (
-    <div className={`h-full bg-white border-r-8 border-yellow-100 flex flex-col transition-all duration-300 p-4 md:p-8 items-center md:items-start`}>
+    <div className={`h-full bg-white border-r-8 border-yellow-100 flex flex-col transition-all duration-300 p-4 md:p-8 items-center md:items-start overflow-hidden`}>
       <div className="mb-12 w-full">
         <div className="space-y-4 w-full">
           {navItems.map((item) => (
@@ -157,8 +144,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
           )}
           {myFriends.map((friend) => (
             <div key={friend.id} className={`flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 border-transparent hover:border-pink-200 transition-all ${!showFullMenu && 'justify-center'}`}>
-              {/* 2.5x Larger Icon: w-12->w-28 */}
-              <div className={`w-28 h-28 rounded-[2rem] ${friend.color} flex items-center justify-center text-5xl shadow-lg border-4 border-white flex-shrink-0 overflow-hidden`}>
+              <div className={`w-14 h-14 rounded-xl md:rounded-2xl ${friend.color} flex items-center justify-center text-2xl shadow-lg border-2 md:border-4 border-white flex-shrink-0 overflow-hidden`}>
                 {friend.photoUrl ? (
                   <img src={friend.photoUrl} className="w-full h-full object-cover" alt={friend.name} />
                 ) : (
@@ -167,10 +153,10 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
               </div>
               {showFullMenu && (
                 <div className="flex-1 min-w-0">
-                  <p className="font-kids text-gray-800 text-2xl truncate">{friend.name}</p>
+                  <p className="font-kids text-gray-800 text-xl truncate">{friend.name}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`w-3.5 h-3.5 rounded-full ${friend.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
-                    <span className={`text-xs font-black uppercase tracking-widest ${friend.status === 'online' ? 'text-green-500' : 'text-gray-400'}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full ${friend.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${friend.status === 'online' ? 'text-green-500' : 'text-gray-400'}`}>
                       {friend.status === 'online' ? 'Online' : 'Asleep'}
                     </span>
                   </div>
@@ -180,10 +166,6 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
           ))}
         </div>
       </div>
-
-      <button onClick={toggle} className="mt-8 p-4 rounded-2xl bg-yellow-400 text-white md:hidden">
-        {isOpen ? '⬅ Hide' : '➡️'}
-      </button>
     </div>
   );
 };

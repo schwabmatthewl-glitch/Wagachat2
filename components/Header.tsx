@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -15,7 +14,7 @@ const Header: React.FC<Props> = ({ onToggleSidebar, user }) => {
           onClick={onToggleSidebar}
           className="md:hidden p-3 rounded-[1.2rem] bg-yellow-100 text-3xl shadow-sm hover:bg-yellow-200 transition-all active:scale-90"
         >
-          🍔
+          ⭐
         </button>
         <div className="flex items-center gap-3">
           <div className="text-5xl drop-shadow-sm">🎈</div>

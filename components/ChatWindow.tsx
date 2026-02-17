@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../firebase.ts';
 import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -40,13 +39,12 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFormatMenu, setShowFormatMenu] = useState(false);
   
-  // Formatting states
   const [activeFont, setActiveFont] = useState(FONTS[0].family);
   const [activeColor, setActiveColor] = useState('#FFFFFF');
   const [activeSize, setActiveSize] = useState<'s' | 'm' | 'l'>('m');
 
   const isFirstLoad = useRef(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAudio = useRef(new Audio(SEND_SOUND_URL));
   const receiveAudio = useRef(new Audio(RECEIVE_SOUND_URL));
@@ -56,10 +54,16 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     receiveAudio.current.volume = 0.35;
   }, []);
 
+  const scrollToBottom = (instant = false) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
+    }
+  };
+
   useEffect(() => {
     const q = query(
       collection(db, "messages"),
-      orderBy("timestamp", "asc"),
+      orderBy("timestamp", "desc"),
       limit(100)
     );
 
@@ -78,11 +82,10 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
 
       snapshot.forEach((doc) => {
         const data = doc.data();
-        const isFromMe = data.senderId === user.id;
         msgs.push({
           id: doc.id,
           senderId: data.senderId,
-          sender: isFromMe ? 'user' : 'friend',
+          sender: data.senderId === user.id ? 'user' : 'friend',
           senderName: data.senderName,
           senderColor: data.senderColor || 'bg-blue-400',
           text: data.text,
@@ -100,7 +103,12 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
         receiveAudio.current.play().catch(() => {});
       }
 
-      setMessages(msgs);
+      const orderedMessages = msgs.reverse();
+      setMessages(orderedMessages);
+      
+      if (isFirstLoad.current) {
+        setTimeout(() => scrollToBottom(true), 100);
+      }
       isFirstLoad.current = false;
     });
 
@@ -108,8 +116,8 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   }, [user.id]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!isFirstLoad.current) {
+      scrollToBottom();
     }
   }, [messages]);
 
@@ -156,12 +164,16 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     }
   };
 
-  const getFontSize = (size?: string) => {
+  const getFontSizeClass = (size?: string) => {
     switch (size) {
       case 's': return 'text-sm md:text-base';
       case 'l': return 'text-2xl md:text-4xl';
       default: return 'text-lg md:text-2xl';
     }
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatMessageText = (text: string, isEmojiOnly: boolean) => {
@@ -175,7 +187,6 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           <span 
             key={i} 
             className={`${isEmojiOnly ? 'text-4xl md:text-6xl' : 'text-2xl md:text-4xl'} inline-block align-middle leading-none mx-0.5`}
-            style={{ filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.1))' }}
           >
             {part}
           </span>
@@ -187,14 +198,14 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
 
   return (
     <div className="h-full flex flex-col bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
         {messages.map((msg: any) => {
           const currentPhoto = msg.sender === 'user' ? user.photoUrl : msg.photoUrl;
           const isEmojiOnly = !msg.imageUrl && !msg.text.replace(/(\p{Emoji_Presentation})/gu, '').trim();
           
           return (
-            <div key={msg.id} className={`flex items-start gap-4 md:gap-6 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className={`w-28 h-28 md:w-36 md:h-36 rounded-[2rem] flex items-center justify-center text-5xl md:text-6xl shadow-xl border-4 border-white flex-shrink-0 overflow-hidden ${msg.senderColor}`}>
+            <div key={msg.id} className={`flex items-start gap-3 md:gap-5 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl flex items-center justify-center text-2xl md:text-4xl shadow-lg border-2 md:border-4 border-white flex-shrink-0 overflow-hidden ${msg.senderColor}`}>
                 {currentPhoto ? (
                   <img src={currentPhoto} className="w-full h-full object-cover" alt={msg.senderName} />
                 ) : (
@@ -202,17 +213,18 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
                 )}
               </div>
               <div className={`max-w-[70%] md:max-w-[60%] flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                <div 
-                  className={`text-[12px] md:text-base font-black mb-2 px-2 uppercase tracking-wider`}
-                  style={{ color: msg.senderColor.includes('blue') ? '#3B82F6' : msg.senderColor.includes('pink') ? '#EC4899' : msg.senderColor.includes('purple') ? '#A855F7' : msg.senderColor.includes('orange') ? '#FB923C' : msg.senderColor.includes('green') ? '#22C55E' : '#EAB308' }}
-                >
-                  {msg.senderName}
+                <div className="flex items-center gap-2 mb-2 px-2 uppercase tracking-wider">
+                   <span className="text-[10px] md:text-xs font-black text-gray-500">{msg.senderName}</span>
+                   <span className="text-[9px] md:text-[10px] font-bold text-gray-300" title={msg.timestamp.toLocaleString()}>
+                     {formatTime(msg.timestamp)}
+                   </span>
                 </div>
                 <div 
+                  title={msg.timestamp.toLocaleString()}
                   className={`
-                    p-5 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-sm leading-snug 
+                    p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] shadow-sm leading-snug 
                     ${msg.sender === 'user' ? 'bg-blue-600 rounded-tr-none' : `${msg.senderColor} rounded-tl-none shadow-md`}
-                    ${getFontSize(msg.fontSize)}
+                    ${getFontSizeClass(msg.fontSize)}
                   `}
                   style={{ 
                     fontFamily: msg.fontFamily || 'inherit',
@@ -226,6 +238,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
             </div>
           );
         })}
+        <div ref={messagesEndRef} className="h-2" />
       </div>
 
       <div className="p-3 md:p-4 bg-yellow-50 border-t-4 border-yellow-100 shrink-0 z-20">
@@ -236,44 +249,18 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
                 <p className="font-kids text-xl text-gray-400 mb-3">Pick a Font! 🎭</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {FONTS.map(f => (
-                    <button 
-                      key={f.name}
-                      onClick={() => setActiveFont(f.family)}
-                      className={`p-3 rounded-xl border-2 transition-all ${activeFont === f.family ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}
-                      style={{ fontFamily: f.family }}
-                    >
+                    <button key={f.name} onClick={() => setActiveFont(f.family)} className={`p-3 rounded-xl border-2 transition-all ${activeFont === f.family ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`} style={{ fontFamily: f.family }}>
                       {f.name}
                     </button>
                   ))}
                 </div>
               </div>
-              
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap gap-4">
                 <div>
                   <p className="font-kids text-xl text-gray-400 mb-2">Color 🎨</p>
                   <div className="flex flex-wrap gap-2">
                     {COLORS.map(c => (
-                      <button 
-                        key={c}
-                        onClick={() => setActiveColor(c)}
-                        className={`w-10 h-10 rounded-full border-4 shadow-sm transition-transform active:scale-90 ${activeColor === c ? 'border-gray-400 scale-110' : 'border-white'}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <p className="font-kids text-xl text-gray-400 mb-2">Size 📏</p>
-                  <div className="flex bg-gray-100 p-1 rounded-2xl">
-                    {(['s', 'm', 'l'] as const).map(s => (
-                      <button 
-                        key={s}
-                        onClick={() => setActiveSize(s)}
-                        className={`px-6 py-2 rounded-xl font-kids text-xl transition-all ${activeSize === s ? 'bg-white shadow-md text-blue-500' : 'text-gray-400'}`}
-                      >
-                        {s.toUpperCase()}
-                      </button>
+                      <button key={c} onClick={() => setActiveColor(c)} className={`w-10 h-10 rounded-full border-4 shadow-sm transition-transform active:scale-90 ${activeColor === c ? 'border-gray-400 scale-110' : 'border-white'}`} style={{ backgroundColor: c }} />
                     ))}
                   </div>
                 </div>
@@ -284,11 +271,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-4 md:gap-10 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
               {EMOJIS.map(e => (
-                <button 
-                  key={e} 
-                  onClick={() => addEmoji(e)} 
-                  className="text-8xl md:text-[10rem] hover:scale-125 transition-transform p-3 active:bg-yellow-100 rounded-3xl"
-                >
+                <button key={e} onClick={() => addEmoji(e)} className="text-8xl md:text-[10rem] hover:scale-125 transition-transform p-3 active:bg-yellow-100 rounded-3xl">
                   {e}
                 </button>
               ))}
@@ -296,55 +279,20 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           )}
 
           <div className="flex items-center gap-2 md:gap-3">
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button 
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100 hover:bg-yellow-50 transition-colors"
-              >
-                🌈
-              </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100 hover:bg-yellow-50 transition-colors"
-              >
-                📎
-              </button>
-              <button 
-                onClick={() => setShowFormatMenu(!showFormatMenu)}
-                className={`w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100 hover:bg-yellow-50 transition-colors ${showFormatMenu ? 'ring-4 ring-blue-200' : ''}`}
-              >
-                🖋️
-              </button>
-            </div>
-            
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handleFileChange} 
+            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100">🌈</button>
+            <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100">📎</button>
+            <button onClick={() => setShowFormatMenu(!showFormatMenu)} className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100">🖋️</button>
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Type here..."
+              style={{ fontFamily: activeFont, color: activeColor === '#FFFFFF' ? '#2563EB' : activeColor }}
+              className="flex-1 p-3 md:p-5 bg-white rounded-2xl outline-none font-bold shadow-inner text-base md:text-2xl"
             />
-            <div className="flex-1">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Type here..."
-                style={{ 
-                  fontFamily: activeFont, 
-                  color: activeColor === '#FFFFFF' ? '#2563EB' : activeColor 
-                }}
-                className={`w-full p-3 md:p-5 bg-white rounded-2xl outline-none font-bold shadow-inner text-base md:text-2xl border-2 border-transparent focus:border-blue-200`}
-              />
-            </div>
-            <button 
-              onClick={() => handleSend()} 
-              disabled={!inputText.trim()} 
-              className="w-12 h-12 md:w-16 md:h-16 bg-blue-500 text-white rounded-2xl shadow-lg text-2xl md:text-3xl flex items-center justify-center active:scale-90 transition-transform disabled:opacity-50"
-            >
-              🚀
-            </button>
+            <button onClick={() => handleSend()} disabled={!inputText.trim()} className="w-12 h-12 md:w-16 md:h-16 bg-blue-500 text-white rounded-2xl shadow-lg text-2xl md:text-3xl flex items-center justify-center active:scale-95 disabled:opacity-50">🚀</button>
           </div>
         </div>
       </div>
