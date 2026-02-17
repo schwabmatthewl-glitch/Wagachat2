@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { db } from './firebase.ts';
@@ -9,6 +10,7 @@ import VideoConference from './components/VideoConference.tsx';
 import AuthScreen from './components/AuthScreen.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import Settings from './components/Settings.tsx';
+import GeminiLiveBuddy from './components/GeminiLiveBuddy.tsx';
 
 const AppContent: React.FC<{ 
   user: any,
@@ -85,6 +87,7 @@ const AppContent: React.FC<{
               <Route path="/" element={<Dashboard onOpenSearch={() => setSidebarOpen(true)} />} />
               <Route path="/room/:id" element={<ChatWindow user={user} />} />
               <Route path="/video" element={<VideoConference userName={user.name} />} />
+              <Route path="/buddy" element={<GeminiLiveBuddy />} />
               <Route path="/settings" element={<Settings user={user} onLogout={onLogout} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
