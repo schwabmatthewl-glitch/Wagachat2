@@ -77,7 +77,6 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-left px-2">Your Cool Name</p>
             <input
               type="text"
               value={username}
@@ -89,7 +88,6 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
           </div>
 
           <div className="space-y-1 relative">
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-left px-2">Secret Code</p>
             <input
               type={showPassword ? "text" : "password"}
               value={password}
