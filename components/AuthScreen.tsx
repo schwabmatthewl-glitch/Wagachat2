@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { db } from '../firebase.ts';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   onLogin: (userData: any, remember: boolean) => void;
@@ -14,45 +14,55 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) return;
+    
+    // TRIMMING IS CRITICAL: Mobile keyboards often add accidental spaces
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+    
+    if (!cleanUsername || !cleanPassword) return;
     setLoading(true);
 
     try {
+      const userId = cleanUsername.toLowerCase();
+      const userRef = doc(db, "users", userId);
+      
       if (isLogin) {
-        const userRef = doc(db, "users", username.toLowerCase());
         const snap = await getDoc(userRef);
-        if (snap.exists() && snap.data().password === password) {
+        // Check password with trimming to be safe
+        if (snap.exists() && snap.data().password?.trim() === cleanPassword) {
           onLogin(snap.data(), remember);
         } else {
-          alert("Oops! Wrong name or password. Try again! 🎈");
+          alert("Oops! Wrong name or password. Try again! 🎈\n(Check for sneaky spaces!)");
         }
       } else {
         // Sign Up
-        const userRef = doc(db, "users", username.toLowerCase());
         const snap = await getDoc(userRef);
         if (snap.exists()) {
           alert("That name is taken! Pick a new one! 🚀");
         } else {
           const userData = {
-            id: username.toLowerCase(),
-            name: username,
-            password: password,
+            id: userId,
+            name: cleanUsername,
+            password: cleanPassword,
             avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
             color: USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)],
             friendIds: [],
             status: 'online',
-            lastSeen: Date.now()
+            lastSeen: Date.now(),
+            createdAt: Date.now()
           };
           await setDoc(userRef, userData);
           onLogin(userData, remember);
         }
       }
     } catch (err) {
+      console.error("Auth Error:", err);
       alert("Internet error! Try again! ☁️");
     } finally {
       setLoading(false);
@@ -66,46 +76,66 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
         <div className="text-6xl mb-4 floating">🎈</div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="User Name"
-            className="w-full text-center p-3 text-xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none"
-            maxLength={15}
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full text-center p-3 text-xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none"
-          />
-          
-          <label className="flex items-center justify-center gap-2 cursor-pointer group">
-            <input 
-              type="checkbox" 
-              checked={remember} 
-              onChange={() => setRemember(!remember)}
-              className="w-6 h-6 rounded-lg accent-pink-500"
+          <div className="space-y-1">
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-left px-2">Your Cool Name</p>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="User Name"
+              className="w-full text-center p-3 text-xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none transition-all"
+              maxLength={15}
             />
-            <span className="text-gray-600 font-bold group-hover:text-pink-500 transition-colors">Remember Me? 🌟</span>
-          </label>
+          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full font-kids text-2xl py-4 rounded-3xl bg-pink-500 text-white shadow-lg hover:bg-pink-600 transition-all active:scale-95 disabled:opacity-50"
-          >
-            {loading ? "Waiting..." : (isLogin ? "Login 🚀" : "Sign Up ✨")}
-          </button>
+          <div className="space-y-1 relative">
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-left px-2">Secret Code</p>
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full text-center p-3 text-xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none transition-all"
+            />
+            <button 
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 bottom-3 text-2xl hover:scale-110 active:scale-90 transition-transform"
+            >
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
+          
+          <div className="flex flex-col gap-4 py-2">
+            <label className="flex items-center justify-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={remember} 
+                onChange={() => setRemember(!remember)}
+                className="w-6 h-6 rounded-lg accent-pink-500 cursor-pointer"
+              />
+              <span className="text-gray-600 font-bold group-hover:text-pink-500 transition-colors">Keep me logged in? 🌟</span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full font-kids text-2xl py-4 rounded-3xl bg-pink-500 text-white shadow-lg hover:bg-pink-600 transition-all active:scale-95 disabled:opacity-50 border-b-8 border-pink-700 active:border-b-0"
+            >
+              {loading ? "Connecting..." : (isLogin ? "Login 🚀" : "Sign Up ✨")}
+            </button>
+          </div>
         </form>
 
         <button 
-          onClick={() => setIsLogin(!isLogin)}
-          className="mt-6 text-blue-500 font-bold hover:underline"
+          onClick={() => {
+            setIsLogin(!isLogin);
+            setUsername('');
+            setPassword('');
+          }}
+          className="mt-6 text-blue-500 font-bold hover:underline bg-blue-50 px-4 py-2 rounded-xl transition-all hover:bg-blue-100"
         >
-          {isLogin ? "Need a new account? Sign up!" : "Already have an account? Login!"}
+          {isLogin ? "Need a new account? Sign up here!" : "Already have an account? Login here!"}
         </button>
       </div>
     </div>

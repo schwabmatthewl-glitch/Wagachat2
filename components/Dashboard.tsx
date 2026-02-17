@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -25,15 +24,6 @@ const Dashboard: React.FC<Props> = ({ onOpenSearch }) => {
       borderColor: 'border-pink-600',
       link: '/video',
       emoji: '🎉'
-    },
-    {
-      title: 'AI Buddy',
-      desc: 'Talk to Sparky!',
-      icon: '🐶',
-      color: 'bg-yellow-400',
-      borderColor: 'border-yellow-600',
-      link: '/buddy',
-      emoji: '🦴'
     },
     {
       title: 'Find Friends',
