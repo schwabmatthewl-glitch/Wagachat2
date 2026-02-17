@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { db } from './firebase.ts';
@@ -10,7 +9,9 @@ import VideoConference from './components/VideoConference.tsx';
 import AuthScreen from './components/AuthScreen.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import Settings from './components/Settings.tsx';
-import GeminiLiveBuddy from './components/GeminiLiveBuddy.tsx';
+
+// 4 Hour Inactivity Timeout
+const INACTIVITY_LIMIT = 4 * 60 * 60 * 1000; 
 
 const AppContent: React.FC<{ 
   user: any,
@@ -20,6 +21,34 @@ const AppContent: React.FC<{
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
+
+  // Activity Tracking
+  useEffect(() => {
+    const handleActivity = () => {
+      localStorage.setItem('wagachat_last_activity', Date.now().toString());
+    };
+
+    window.addEventListener('mousedown', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('touchstart', handleActivity);
+    window.addEventListener('mousemove', handleActivity);
+
+    const checkInactivity = setInterval(() => {
+      const lastActivity = parseInt(localStorage.getItem('wagachat_last_activity') || '0');
+      if (lastActivity && (Date.now() - lastActivity > INACTIVITY_LIMIT)) {
+        console.log("Session expired due to inactivity.");
+        onLogout();
+      }
+    }, 60000); // Check every minute
+
+    return () => {
+      window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('mousemove', handleActivity);
+      clearInterval(checkInactivity);
+    };
+  }, [onLogout]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -51,7 +80,7 @@ const AppContent: React.FC<{
       unsubscribe();
       clearInterval(interval);
     };
-  }, [user.id]);
+  }, [user.id, setUser]);
 
   return (
     <div className="flex h-screen h-[100dvh] bg-[#FFF9E6] overflow-hidden relative w-full">
@@ -87,7 +116,6 @@ const AppContent: React.FC<{
               <Route path="/" element={<Dashboard onOpenSearch={() => setSidebarOpen(true)} />} />
               <Route path="/room/:id" element={<ChatWindow user={user} />} />
               <Route path="/video" element={<VideoConference userName={user.name} />} />
-              <Route path="/buddy" element={<GeminiLiveBuddy />} />
               <Route path="/settings" element={<Settings user={user} onLogout={onLogout} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -113,15 +141,25 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('wagachat_session');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    // Check inactivity immediately on reload
+    const lastActivity = parseInt(localStorage.getItem('wagachat_last_activity') || '0');
+    if (lastActivity && (Date.now() - lastActivity > INACTIVITY_LIMIT)) {
+      localStorage.removeItem('wagachat_session');
+      localStorage.removeItem('wagachat_last_activity');
+      setUser(null);
+    } else {
+      const savedUser = localStorage.getItem('wagachat_session');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+        localStorage.setItem('wagachat_last_activity', Date.now().toString());
+      }
     }
     setLoading(false);
   }, []);
 
   const handleLogin = (userData: any, remember: boolean) => {
     setUser(userData);
+    localStorage.setItem('wagachat_last_activity', Date.now().toString());
     if (remember) {
       localStorage.setItem('wagachat_session', JSON.stringify(userData));
     }
@@ -130,6 +168,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('wagachat_session');
+    localStorage.removeItem('wagachat_last_activity');
   };
 
   if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-yellow-50 font-kids text-3xl text-blue-500">Loading... 🎈</div>;
