@@ -133,8 +133,25 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           startAudioOff: false,
         });
 
+        // Force use of system default microphone (fixes Steam mic issue on some PCs)
+        await frame.setInputDevicesAsync({ audioDeviceId: 'default' });
+        console.log('Set microphone to system default');
+
         // Double-check audio is enabled after joining
         console.log('After join - audio enabled:', frame.localAudio(), 'video enabled:', frame.localVideo());
+
+        // Set up local video preview
+        const localParticipant = frame.participants().local;
+        if (localParticipant && localVideoRef.current) {
+          const videoTrack = localParticipant.tracks?.video?.persistentTrack || localParticipant.videoTrack;
+          if (videoTrack) {
+            const stream = new MediaStream([videoTrack]);
+            localVideoRef.current.srcObject = stream;
+            console.log('Local video preview set up');
+          } else {
+            console.log('No local video track found yet');
+          }
+        }
 
       } catch (err: any) {
         console.error('Failed to initialize call:', err);
@@ -243,6 +260,15 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         if (tracks.length > 0) {
           const stream = new MediaStream(tracks);
           videoRef.current.srcObject = stream;
+          
+          // Force play to handle autoplay restrictions
+          const playPromise = videoRef.current.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((error) => {
+              console.log(`Autoplay blocked for ${participant.name}:`, error.message);
+              // Audio will be enabled when user clicks the "Enable Audio" button
+            });
+          }
           
           // Log what's actually in the video element
           console.log(`${participant.name} video element - muted: ${videoRef.current.muted}, tracks in stream:`, stream.getTracks().map(t => t.kind));
