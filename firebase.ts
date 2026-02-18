@@ -1,8 +1,6 @@
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// PASTE YOUR REAL CONFIG BELOW THIS LINE
 const firebaseConfig = {
   apiKey: "AIzaSyCtM7JonPKTecmq937kTbZ-MF6LIWPybvo",
   authDomain: "wagachat-3a07e.firebaseapp.com",

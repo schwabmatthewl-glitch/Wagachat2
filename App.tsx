@@ -20,7 +20,15 @@ const AppContent: React.FC<{
 }> = ({ user, setUser, onLogout }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [dmFriend, setDmFriend] = useState<any>(null);
   const location = useLocation();
+
+  // Clear dmFriend when navigating away from DM routes
+  useEffect(() => {
+    if (!location.pathname.startsWith('/dm/')) {
+      setDmFriend(null);
+    }
+  }, [location.pathname]);
 
   // Activity Tracking
   useEffect(() => {
@@ -97,6 +105,10 @@ const AppContent: React.FC<{
           toggle={() => setSidebarOpen(!isSidebarOpen)} 
           userId={user.id}
           hasUnread={hasUnread}
+          onSelectFriend={(friend) => {
+            setDmFriend(friend);
+            setSidebarOpen(false);
+          }}
         />
       </div>
 
@@ -115,6 +127,7 @@ const AppContent: React.FC<{
             <Routes>
               <Route path="/" element={<Dashboard onOpenSearch={() => setSidebarOpen(true)} />} />
               <Route path="/room/:id" element={<ChatWindow user={user} />} />
+              <Route path="/dm/:friendId" element={<ChatWindow user={user} dmFriend={dmFriend} />} />
               <Route path="/video" element={<VideoConference userName={user.name} />} />
               <Route path="/settings" element={<Settings user={user} onLogout={onLogout} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
