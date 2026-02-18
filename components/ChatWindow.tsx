@@ -11,7 +11,7 @@ interface Props {
   dmFriend?: any; // The friend we're DMing with (passed from parent)
 }
 
-const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/1105/1105-preview.mp3'; 
+const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'; // Swoosh sound
 const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3';
 
 const FONTS = [
@@ -20,7 +20,6 @@ const FONTS = [
   { name: 'Retro', family: "'Press Start 2P', cursive" },
   { name: 'Ink', family: "'Indie Flower', cursive" },
   { name: 'Marker', family: "'Permanent Marker', cursive" },
-  { name: 'Spooky', family: "'Creepster', cursive" },
   { name: 'Robot', family: "'Orbitron', sans-serif" },
   { name: 'Script', family: "'Shadows Into Light', cursive" },
   { name: 'Rock', family: "'Rock Salt', cursive" },
@@ -29,7 +28,12 @@ const FONTS = [
   { name: 'Neon', family: "'Monoton', cursive" },
   { name: 'Typewriter', family: "'Special Elite', cursive" },
   { name: 'Urban', family: "'Bungee', cursive" },
-  { name: 'Terminal', family: "'VT323', monospace" }
+  { name: 'Terminal', family: "'VT323', monospace" },
+  { name: 'Balloon', family: "'Luckiest Guy', cursive" },
+  { name: 'Blocky', family: "'Rubik Mono One', sans-serif" },
+  { name: 'Outline', family: "'Londrina Outline', cursive" },
+  { name: 'Bubbly', family: "'Bubblegum Sans', cursive" },
+  { name: 'Chunky', family: "'Titan One', cursive" }
 ];
 
 const COLORS = [
@@ -81,7 +85,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
   }, [friendId, dmFriendProp]);
 
   useEffect(() => {
-    sendAudio.current.volume = 0.15;
+    sendAudio.current.volume = 0.08;
     receiveAudio.current.volume = 0.4;
   }, []);
 
@@ -407,9 +411,9 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
           )}
 
           {showEmojiPicker && (
-            <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-2 md:gap-4 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
+            <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-3 md:gap-5 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
               {EMOJIS.map(e => (
-                <button key={e} onClick={() => addEmoji(e)} className="text-2xl md:text-4xl hover:scale-125 transition-transform p-1 md:p-2 active:bg-yellow-100 rounded-xl">
+                <button key={e} onClick={() => addEmoji(e)} className="text-4xl md:text-6xl hover:scale-125 transition-transform p-1 md:p-2 active:bg-yellow-100 rounded-xl">
                   {e}
                 </button>
               ))}

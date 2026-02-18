@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { db } from '../firebase.ts';
-import { doc, collection, onSnapshot, query, limit, updateDoc, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, collection, onSnapshot, query, limit, updateDoc, arrayUnion, getDoc, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 interface Props {
   isOpen: boolean;
@@ -11,7 +11,46 @@ interface Props {
   onSelectFriend?: (friend: any) => void;
 }
 
-const STALE_ONLINE_THRESHOLD = 60000; 
+const STALE_ONLINE_THRESHOLD = 60000;
+
+// Confetti pop animation
+const triggerConfetti = (element: HTMLElement) => {
+  const confetti = document.createElement('div');
+  confetti.innerHTML = '🎉✨🎊';
+  confetti.style.cssText = `
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    pointer-events: none;
+    animation: confettiPop 0.5s ease-out forwards;
+    z-index: 100;
+  `;
+  element.style.position = 'relative';
+  element.appendChild(confetti);
+  
+  // Haptic feedback
+  if (navigator.vibrate) {
+    navigator.vibrate(50);
+  }
+  
+  setTimeout(() => confetti.remove(), 500);
+};
+
+// Add confetti animation to document
+if (typeof document !== 'undefined' && !document.getElementById('confetti-styles')) {
+  const style = document.createElement('style');
+  style.id = 'confetti-styles';
+  style.textContent = `
+    @keyframes confettiPop {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
+      100% { opacity: 0; transform: translate(-50%, -100%) scale(1); }
+    }
+  `;
+  document.head.appendChild(style);
+} 
 
 const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectFriend }) => {
   const navigate = useNavigate();
@@ -19,6 +58,8 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
   const [isSearching, setIsSearching] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [myFriends, setMyFriends] = useState<any[]>([]);
+  const [unreadDMs, setUnreadDMs] = useState<{ [friendId: string]: boolean }>({});
+  const [lastReadTimestamps, setLastReadTimestamps] = useState<{ [friendId: string]: number }>({});
 
   useEffect(() => {
     const q = query(collection(db, "users"), limit(50));
@@ -57,6 +98,45 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
     fetchFriends();
   }, [allUsers, userId]);
 
+  // Track unread DMs for each friend
+  useEffect(() => {
+    if (myFriends.length === 0) return;
+
+    const unsubscribers: (() => void)[] = [];
+
+    myFriends.forEach(friend => {
+      const dmPairId = [userId, friend.id].sort().join('_');
+      const lastRead = lastReadTimestamps[friend.id] || 0;
+      
+      const q = query(
+        collection(db, "messages"),
+        where("dmPairId", "==", dmPairId),
+        where("senderId", "==", friend.id),
+        orderBy("timestamp", "desc"),
+        limit(1)
+      );
+
+      const unsub = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const latestMsg = snapshot.docs[0].data();
+          const msgTime = latestMsg.timestamp?.toMillis() || 0;
+          if (msgTime > lastRead) {
+            setUnreadDMs(prev => ({ ...prev, [friend.id]: true }));
+          }
+        }
+      });
+
+      unsubscribers.push(unsub);
+    });
+
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, [myFriends, userId, lastReadTimestamps]);
+
+  const markAsRead = (friendId: string) => {
+    setLastReadTimestamps(prev => ({ ...prev, [friendId]: Date.now() }));
+    setUnreadDMs(prev => ({ ...prev, [friendId]: false }));
+  };
+
   const addFriend = async (friendId: string) => {
     try {
       await updateDoc(doc(db, "users", userId), {
@@ -93,6 +173,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={(e) => triggerConfetti(e.currentTarget as HTMLElement)}
               className={({ isActive }) => `
                 flex items-center gap-6 p-4 md:p-5 rounded-[2.5rem] transition-all relative w-full
                 ${isActive ? 'bg-blue-500 text-white shadow-2xl scale-105' : 'hover:bg-yellow-50 text-gray-600'}
@@ -147,7 +228,9 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
           {myFriends.map((friend) => (
             <button 
               key={friend.id} 
-              onClick={() => {
+              onClick={(e) => {
+                triggerConfetti(e.currentTarget as HTMLElement);
+                markAsRead(friend.id);
                 navigate(`/dm/${friend.id}`);
                 if (onSelectFriend) onSelectFriend(friend);
                 if (window.innerWidth < 768) toggle();
@@ -163,7 +246,12 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
               </div>
               {showFullMenu && (
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="font-kids text-gray-800 text-xl truncate">{friend.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-kids text-gray-800 text-xl truncate">{friend.name}</p>
+                    {unreadDMs[friend.id] && (
+                      <span className="w-3 h-3 rounded-full bg-pink-500 animate-pulse flex-shrink-0" />
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`w-2.5 h-2.5 rounded-full ${friend.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
                     <span className={`text-[10px] font-black uppercase tracking-widest ${friend.status === 'online' ? 'text-green-500' : 'text-gray-400'}`}>

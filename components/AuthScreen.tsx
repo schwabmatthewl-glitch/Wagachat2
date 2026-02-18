@@ -10,6 +10,45 @@ interface Props {
 const USER_COLORS = ['bg-blue-400', 'bg-pink-400', 'bg-purple-400', 'bg-orange-400', 'bg-green-400', 'bg-yellow-500', 'bg-red-400', 'bg-indigo-400'];
 const AVATARS = ['🐶', '🐱', '🦁', 'Rex', '🐰', '🐼', '🦄', '🦊'];
 
+// Confetti pop animation
+const triggerConfetti = (element: HTMLElement) => {
+  const confetti = document.createElement('div');
+  confetti.innerHTML = '🎉✨🎊';
+  confetti.style.cssText = `
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    pointer-events: none;
+    animation: confettiPop 0.5s ease-out forwards;
+    z-index: 100;
+  `;
+  element.style.position = 'relative';
+  element.appendChild(confetti);
+  
+  // Haptic feedback
+  if (navigator.vibrate) {
+    navigator.vibrate(50);
+  }
+  
+  setTimeout(() => confetti.remove(), 500);
+};
+
+// Add confetti animation to document
+if (typeof document !== 'undefined' && !document.getElementById('confetti-styles-auth')) {
+  const style = document.createElement('style');
+  style.id = 'confetti-styles-auth';
+  style.textContent = `
+    @keyframes confettiPop {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
+      100% { opacity: 0; transform: translate(-50%, -100%) scale(1); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 const AuthScreen: React.FC<Props> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
@@ -20,6 +59,10 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Trigger confetti on the button
+    const button = (e.target as HTMLFormElement).querySelector('button[type="submit"]');
+    if (button) triggerConfetti(button as HTMLElement);
     
     // TRIMMING IS CRITICAL: Mobile keyboards often add accidental spaces
     const cleanUsername = username.trim();
