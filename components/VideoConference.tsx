@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface Props {
   userName: string;
@@ -17,168 +17,184 @@ interface Participant {
 }
 
 const VideoConference: React.FC<Props> = ({ userName }) => {
-  const [callFrame, setCallFrame] = useState<any>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isJoining, setIsJoining] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const containerRef = useRef<HTMLDivElement>(null);
+  const callFrameRef = useRef<any>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const hasInitialized = useRef(false);
 
-  // Load Daily.co script dynamically
   useEffect(() => {
-    const loadDaily = async () => {
-      // Check if Daily is already loaded
-      if ((window as any).DailyIframe) {
-        initializeCall();
-        return;
-      }
+    // Prevent double initialization (React strict mode)
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
 
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/@daily-co/daily-js';
-      script.async = true;
-      script.onload = () => {
-        initializeCall();
-      };
-      script.onerror = () => {
-        setError('Failed to load video chat. Please refresh and try again.');
-        setIsJoining(false);
-      };
-      document.body.appendChild(script);
+    let mounted = true;
+
+    const loadAndJoin = async () => {
+      try {
+        // Load Daily.co script if not already loaded
+        if (!(window as any).DailyIframe) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@daily-co/daily-js';
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Daily.co'));
+            document.body.appendChild(script);
+          });
+        }
+
+        if (!mounted) return;
+
+        const Daily = (window as any).DailyIframe;
+        
+        // Create call object
+        const frame = Daily.createCallObject({
+          videoSource: true,
+          audioSource: true,
+        });
+        
+        callFrameRef.current = frame;
+
+        // Set up event listeners
+        frame.on('joined-meeting', () => {
+          if (mounted) {
+            setIsJoining(false);
+            updateParticipantList(frame);
+          }
+        });
+
+        frame.on('left-meeting', () => {
+          if (mounted) {
+            setParticipants([]);
+          }
+        });
+
+        frame.on('participant-joined', () => {
+          if (mounted) updateParticipantList(frame);
+        });
+
+        frame.on('participant-left', () => {
+          if (mounted) updateParticipantList(frame);
+        });
+
+        frame.on('participant-updated', () => {
+          if (mounted) updateParticipantList(frame);
+        });
+
+        frame.on('track-started', (event: any) => {
+          if (!mounted) return;
+          updateParticipantList(frame);
+          
+          // Update local video preview
+          if (event.participant?.local && event.track?.kind === 'video' && localVideoRef.current) {
+            const stream = new MediaStream([event.track]);
+            localVideoRef.current.srcObject = stream;
+          }
+        });
+
+        frame.on('track-stopped', () => {
+          if (mounted) updateParticipantList(frame);
+        });
+
+        frame.on('error', (event: any) => {
+          console.error('Daily error:', event);
+          if (mounted) {
+            setError(event.errorMsg || 'An error occurred');
+            setIsJoining(false);
+          }
+        });
+
+        // Join the room
+        await frame.join({
+          url: DAILY_ROOM_URL,
+          userName: userName || 'Friend',
+        });
+
+      } catch (err: any) {
+        console.error('Failed to initialize call:', err);
+        if (mounted) {
+          setError(err.message || 'Failed to join video chat');
+          setIsJoining(false);
+        }
+      }
     };
 
-    loadDaily();
+    loadAndJoin();
 
+    // Cleanup function
     return () => {
-      if (callFrame) {
-        callFrame.leave();
-        callFrame.destroy();
+      mounted = false;
+      if (callFrameRef.current) {
+        try {
+          callFrameRef.current.leave().catch(() => {});
+          callFrameRef.current.destroy();
+        } catch (e) {
+          console.log('Cleanup error (safe to ignore):', e);
+        }
+        callFrameRef.current = null;
       }
     };
-  }, []);
+  }, [userName]);
 
-  const initializeCall = async () => {
+  const updateParticipantList = (frame: any) => {
+    if (!frame) return;
+
     try {
-      const Daily = (window as any).DailyIframe;
-      
-      const frame = Daily.createCallObject({
-        videoSource: true,
-        audioSource: true,
+      const dailyParticipants = frame.participants();
+      const participantList: Participant[] = [];
+
+      Object.values(dailyParticipants).forEach((p: any) => {
+        participantList.push({
+          id: p.session_id,
+          name: p.user_name || 'Friend',
+          videoTrack: p.tracks?.video?.persistentTrack,
+          audioTrack: p.tracks?.audio?.persistentTrack,
+          isLocal: p.local,
+        });
       });
 
-      // Set up event listeners
-      frame.on('joined-meeting', handleJoinedMeeting);
-      frame.on('left-meeting', handleLeftMeeting);
-      frame.on('participant-joined', handleParticipantUpdate);
-      frame.on('participant-left', handleParticipantUpdate);
-      frame.on('participant-updated', handleParticipantUpdate);
-      frame.on('track-started', handleTrackStarted);
-      frame.on('track-stopped', handleTrackStopped);
-      frame.on('error', handleError);
-
-      setCallFrame(frame);
-
-      // Join the room
-      await frame.join({
-        url: DAILY_ROOM_URL,
-        userName: userName || 'Friend',
-      });
-
-    } catch (err: any) {
-      console.error('Failed to initialize call:', err);
-      setError(err.message || 'Failed to join video chat');
-      setIsJoining(false);
+      setParticipants(participantList);
+    } catch (e) {
+      console.error('Error updating participants:', e);
     }
   };
 
-  const handleJoinedMeeting = useCallback((event: any) => {
-    console.log('Joined meeting:', event);
-    setIsJoining(false);
-    updateParticipants();
-  }, []);
-
-  const handleLeftMeeting = useCallback(() => {
-    console.log('Left meeting');
-    setParticipants([]);
-  }, []);
-
-  const handleParticipantUpdate = useCallback(() => {
-    updateParticipants();
-  }, []);
-
-  const handleTrackStarted = useCallback((event: any) => {
-    console.log('Track started:', event);
-    updateParticipants();
-    
-    // Update local video preview
-    if (event.participant?.local && event.track?.kind === 'video' && localVideoRef.current) {
-      const stream = new MediaStream([event.track]);
-      localVideoRef.current.srcObject = stream;
-    }
-  }, []);
-
-  const handleTrackStopped = useCallback(() => {
-    updateParticipants();
-  }, []);
-
-  const handleError = useCallback((event: any) => {
-    console.error('Daily error:', event);
-    setError(event.errorMsg || 'An error occurred');
-  }, []);
-
-  const updateParticipants = useCallback(() => {
-    if (!callFrame) return;
-
-    const dailyParticipants = callFrame.participants();
-    const participantList: Participant[] = [];
-
-    Object.values(dailyParticipants).forEach((p: any) => {
-      participantList.push({
-        id: p.session_id,
-        name: p.user_name || 'Friend',
-        videoTrack: p.tracks?.video?.track,
-        audioTrack: p.tracks?.audio?.track,
-        isLocal: p.local,
-      });
-    });
-
-    setParticipants(participantList);
-  }, [callFrame]);
-
-  // Update participants when callFrame changes
-  useEffect(() => {
-    if (callFrame) {
-      updateParticipants();
-    }
-  }, [callFrame, updateParticipants]);
-
   const toggleMute = () => {
-    if (callFrame) {
-      callFrame.setLocalAudio(!isMuted);
-      setIsMuted(!isMuted);
+    if (callFrameRef.current) {
+      const newMuted = !isMuted;
+      callFrameRef.current.setLocalAudio(!newMuted);
+      setIsMuted(newMuted);
     }
   };
 
   const toggleVideo = () => {
-    if (callFrame) {
-      callFrame.setLocalVideo(!isVideoOff);
-      setIsVideoOff(!isVideoOff);
+    if (callFrameRef.current) {
+      const newVideoOff = !isVideoOff;
+      callFrameRef.current.setLocalVideo(!newVideoOff);
+      setIsVideoOff(newVideoOff);
     }
   };
 
   const leaveCall = async () => {
-    if (callFrame) {
-      await callFrame.leave();
-      callFrame.destroy();
+    if (callFrameRef.current) {
+      try {
+        await callFrameRef.current.leave();
+        callFrameRef.current.destroy();
+        callFrameRef.current = null;
+      } catch (e) {
+        console.log('Leave error:', e);
+      }
     }
     window.location.hash = '/';
   };
 
   // Get remote participants (non-local)
   const remoteParticipants = participants.filter(p => !p.isLocal);
-  const localParticipant = participants.find(p => p.isLocal);
 
   // Render a participant's video
   const ParticipantVideo: React.FC<{ participant: Participant }> = ({ participant }) => {
@@ -249,7 +265,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
 
   return (
     <div className="h-full flex flex-col relative bg-gray-950 rounded-[3rem] overflow-hidden">
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
         <div className={`grid gap-4 md:gap-6 w-full h-full max-w-4xl mx-auto ${
           remoteParticipants.length === 0 ? 'grid-cols-1' : 
           remoteParticipants.length === 1 ? 'grid-cols-1 md:grid-cols-2' : 

@@ -12,7 +12,7 @@ interface Props {
 }
 
 const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/1105/1105-preview.mp3'; 
-const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; // Consistent Pop Sound
+const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3';
 
 const FONTS = [
   { name: 'Quicksand', family: "'Quicksand', sans-serif" },
@@ -57,6 +57,10 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
   // Use prop if available, otherwise use fetched friend
   const dmFriend = dmFriendProp || fetchedFriend;
 
+  // Determine if this is a DM or group chat based on the route
+  const isDM = !!friendId;
+  const dmPairId = isDM && friendId ? [user.id, friendId].sort().join('_') : null;
+
   // Fetch friend data if we have friendId but no dmFriendProp (e.g., direct URL navigation)
   useEffect(() => {
     if (friendId && !dmFriendProp) {
@@ -75,10 +79,6 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
       setFetchedFriend(null);
     }
   }, [friendId, dmFriendProp]);
-
-  // Determine if this is a DM or group chat
-  const isDM = !!friendId;
-  const dmPairId = isDM && (dmFriend?.id || friendId) ? [user.id, dmFriend?.id || friendId].sort().join('_') : null;
 
   useEffect(() => {
     sendAudio.current.volume = 0.15;
@@ -99,6 +99,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
     // Build the query based on whether it's a DM or group chat
     let q;
     if (isDM && dmPairId) {
+      // DM: Query messages with this specific dmPairId
       q = query(
         collection(db, "messages"),
         where("dmPairId", "==", dmPairId),
@@ -106,10 +107,10 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
         limit(100)
       );
     } else {
-      // Group chat (Clubhouse) - messages without dmPairId or with null
+      // Group chat (Clubhouse): Query ALL messages and filter client-side
+      // This is because existing messages don't have dmPairId field
       q = query(
         collection(db, "messages"),
-        where("dmPairId", "==", null),
         orderBy("timestamp", "desc"),
         limit(100)
       );
@@ -128,10 +129,16 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
         }
       });
 
-      snapshot.forEach((doc) => {
-        const data = doc.data();
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        
+        // For Clubhouse (non-DM), filter out messages that have a dmPairId
+        if (!isDM && data.dmPairId) {
+          return; // Skip DM messages in Clubhouse view
+        }
+        
         msgs.push({
-          id: doc.id,
+          id: docSnap.id,
           senderId: data.senderId,
           sender: data.senderId === user.id ? 'user' : 'friend',
           senderName: data.senderName,
@@ -158,10 +165,12 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
         setTimeout(() => scrollToBottom(true), 100);
       }
       isFirstLoad.current = false;
+    }, (error) => {
+      console.error("Error fetching messages:", error);
     });
 
     return () => unsubscribe();
-  }, [user.id, isDM, dmPairId, friendId]);
+  }, [user.id, isDM, dmPairId, friendId, roomId]);
 
   useEffect(() => {
     if (!isFirstLoad.current) {
@@ -175,7 +184,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
     try {
       sendAudio.current.play().catch(() => {});
       
-      await addDoc(collection(db, "messages"), {
+      const messageData: any = {
         senderId: user.id,
         senderName: user.name,
         senderColor: user.color,
@@ -187,8 +196,14 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
         fontFamily: activeFont,
         fontSize: activeSize,
         textColor: activeColor,
-        dmPairId: dmPairId // null for group chat, "id1_id2" for DMs
-      });
+      };
+
+      // Only add dmPairId for DM messages
+      if (isDM && dmPairId) {
+        messageData.dmPairId = dmPairId;
+      }
+      
+      await addDoc(collection(db, "messages"), messageData);
       setInputText('');
       setShowEmojiPicker(false);
       setShowFormatMenu(false);
@@ -273,11 +288,18 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
     });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
     <div className={`h-full flex flex-col rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative ${isDM ? 'bg-purple-50' : 'bg-white'}`}>
       {/* DM Header */}
       {isDM && dmFriend && (
-        <div className="bg-gradient-to-r from-purple-100 to-pink-100 px-6 py-4 border-b-4 border-purple-200 flex items-center gap-4">
+        <div className="bg-gradient-to-r from-purple-100 to-pink-100 px-6 py-4 border-b-4 border-purple-200 flex items-center gap-4 shrink-0">
           <div className={`w-12 h-12 rounded-xl ${dmFriend.color || 'bg-purple-400'} flex items-center justify-center text-2xl shadow-lg border-2 border-white overflow-hidden`}>
             {dmFriend.photoUrl ? (
               <img src={dmFriend.photoUrl} className="w-full h-full object-cover" alt={dmFriend.name} />
@@ -293,6 +315,14 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
       )}
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+            <span className="text-6xl">💬</span>
+            <p className="text-gray-400 font-bold">
+              {isDM ? `Start a conversation with ${dmFriend?.name || 'your friend'}!` : 'No messages yet. Say hello!'}
+            </p>
+          </div>
+        )}
         {messages.map((msg: any) => {
           const currentPhoto = msg.sender === 'user' ? user.photoUrl : msg.photoUrl;
           const isEmojiOnly = !msg.imageUrl && !msg.text.replace(/(\p{Emoji_Presentation})/gu, '').trim();
@@ -395,7 +425,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={handleKeyDown}
               placeholder="Type here..."
               style={{ fontFamily: activeFont, color: activeColor === '#FFFFFF' ? '#2563EB' : activeColor }}
               className="flex-1 p-3 md:p-5 bg-white rounded-2xl outline-none font-bold shadow-inner text-base md:text-2xl"
