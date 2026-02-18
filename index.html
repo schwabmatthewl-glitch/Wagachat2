@@ -60,13 +60,13 @@
       .confetti {
         position: fixed;
         pointer-events: none;
-        z-index: 9999;
-        border-radius: 50%;
-        animation: confetti-fall 1s ease-out forwards;
+        z-index: 99999;
+        border-radius: 2px;
+        animation: confetti-pop 0.8s ease-out forwards;
       }
-      @keyframes confetti-fall {
-        0% { transform: translate(0, 0) scale(1); opacity: 1; }
-        100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+      @keyframes confetti-pop {
+        0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+        100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0); opacity: 0; }
       }
     </style>
     <script type="importmap">
