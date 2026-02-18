@@ -52,17 +52,21 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
 
         const Daily = (window as any).DailyIframe;
         
-        // Create call object
+        // Create call object with explicit audio/video settings
         const frame = Daily.createCallObject({
-          videoSource: true,
-          audioSource: true,
+          startVideoOff: false,
+          startAudioOff: false,
         });
         
         callFrameRef.current = frame;
+        
+        // Expose to window for debugging (can check in console)
+        (window as any).dailyCall = frame;
 
         // Set up event listeners
         frame.on('joined-meeting', () => {
           if (mounted) {
+            console.log('Joined meeting - local participant:', frame.participants().local);
             setIsJoining(false);
             updateParticipantList(frame);
           }
@@ -82,11 +86,13 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           if (mounted) updateParticipantList(frame);
         });
 
-        frame.on('participant-updated', () => {
+        frame.on('participant-updated', (event: any) => {
+          console.log('Participant updated:', event?.participant?.user_name, event?.participant?.tracks);
           if (mounted) updateParticipantList(frame);
         });
 
         frame.on('track-started', (event: any) => {
+          console.log('Track started:', event?.track?.kind, 'from', event?.participant?.user_name, 'local:', event?.participant?.local);
           if (!mounted) return;
           updateParticipantList(frame);
           
@@ -97,7 +103,8 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           }
         });
 
-        frame.on('track-stopped', () => {
+        frame.on('track-stopped', (event: any) => {
+          console.log('Track stopped:', event?.track?.kind, 'from', event?.participant?.user_name);
           if (mounted) updateParticipantList(frame);
         });
 
@@ -109,11 +116,25 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           }
         });
 
-        // Join the room
+        // Listen for camera/mic access errors
+        frame.on('camera-error', (event: any) => {
+          console.error('Camera error:', event);
+        });
+
+        frame.on('nonfatal-error', (event: any) => {
+          console.warn('Daily non-fatal error:', event);
+        });
+
+        // Join the room with explicit audio/video on
         await frame.join({
           url: DAILY_ROOM_URL,
           userName: userName || 'Friend',
+          startVideoOff: false,
+          startAudioOff: false,
         });
+
+        // Double-check audio is enabled after joining
+        console.log('After join - audio enabled:', frame.localAudio(), 'video enabled:', frame.localVideo());
 
       } catch (err: any) {
         console.error('Failed to initialize call:', err);
@@ -219,7 +240,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     }, [participant.videoTrack, participant.audioTrack]);
 
     return (
-      <div className="relative aspect-video rounded-3xl overflow-hidden border-4 border-white/10 bg-gray-900 shadow-2xl">
+      <div className="relative aspect-[3/4] rounded-3xl overflow-hidden border-4 border-white/10 bg-gray-900 shadow-2xl">
         {/* Always render video element for audio playback, hide visually if no video */}
         <video
           ref={videoRef}
@@ -234,7 +255,7 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
             <span className="text-white font-kids text-lg">Camera off</span>
           </div>
         )}
-        <div className="absolute bottom-4 left-4 right-4 text-yellow-300 font-kids text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,1)] truncate">
+        <div className="absolute bottom-4 left-4 right-4 text-yellow-300 font-kids text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,1)] truncate text-center">
           {participant.name}
         </div>
       </div>
@@ -275,11 +296,44 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
   }
 
   return (
-    <div className="h-full flex flex-col relative bg-gray-950 rounded-[3rem] overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-        <div className={`grid gap-4 md:gap-6 w-full h-full max-w-4xl mx-auto ${
+    <div className="h-full flex flex-col bg-gray-950 rounded-[3rem] overflow-hidden">
+      {/* Header with selfie cam and participant count */}
+      <div className="shrink-0 p-4 flex items-center justify-between bg-white/5 border-b border-white/10">
+        {/* Local video preview - portrait */}
+        <div className="w-20 h-28 md:w-24 md:h-32 rounded-2xl overflow-hidden border-3 border-white shadow-xl bg-gray-800 relative">
+          <video 
+            ref={localVideoRef} 
+            autoPlay 
+            playsInline 
+            muted 
+            className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity ${isVideoOff ? 'opacity-0' : 'opacity-100'}`} 
+          />
+          {isVideoOff && (
+            <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-2xl">🌟</div>
+          )}
+          <div className="absolute bottom-1 left-0 right-0 text-white font-black text-[8px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">
+            ME
+          </div>
+        </div>
+
+        {/* Title and participant count */}
+        <div className="flex-1 text-center px-4">
+          <h2 className="text-xl md:text-2xl font-kids text-white">Video Party! 🎉</h2>
+          <span className="text-blue-200 text-sm font-bold">
+            👥 {participants.length} {participants.length === 1 ? 'person' : 'people'}
+          </span>
+        </div>
+
+        {/* Spacer to balance layout */}
+        <div className="w-20 md:w-24"></div>
+      </div>
+
+      {/* Participants grid - quadrant layout with portrait videos */}
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className={`grid gap-4 w-full h-full max-w-3xl mx-auto ${
           remoteParticipants.length === 0 ? 'grid-cols-1' : 
-          remoteParticipants.length === 1 ? 'grid-cols-1 md:grid-cols-2' : 
+          remoteParticipants.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : 
+          remoteParticipants.length === 2 ? 'grid-cols-2 max-w-lg mx-auto' :
           'grid-cols-2'
         }`}>
           {remoteParticipants.length === 0 ? (
@@ -297,32 +351,8 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
         </div>
       </div>
 
-      {/* Local video preview */}
-      <div className="absolute top-6 left-6 w-24 h-32 md:w-32 md:h-44 rounded-2xl md:rounded-[2rem] overflow-hidden border-4 border-white shadow-2xl z-20 bg-gray-800">
-        <video 
-          ref={localVideoRef} 
-          autoPlay 
-          playsInline 
-          muted 
-          className={`w-full h-full object-cover transform scale-x-[-1] transition-opacity ${isVideoOff ? 'opacity-0' : 'opacity-100'}`} 
-        />
-        {isVideoOff && (
-          <div className="absolute inset-0 flex items-center justify-center bg-blue-500 text-3xl">🌟</div>
-        )}
-        <div className="absolute bottom-2 left-0 right-0 text-white font-black text-[10px] uppercase text-center drop-shadow-[0_1px_1px_rgba(0,0,0,1)]">
-          ME
-        </div>
-      </div>
-
-      {/* Participant count badge */}
-      <div className="absolute top-6 right-6 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full z-20">
-        <span className="text-white font-kids text-lg">
-          👥 {participants.length} {participants.length === 1 ? 'person' : 'people'}
-        </span>
-      </div>
-
       {/* Controls */}
-      <div className="p-4 md:p-6 flex items-center justify-center gap-4 bg-white/5 border-t border-white/10 shrink-0 z-30">
+      <div className="p-4 md:p-6 flex items-center justify-center gap-4 bg-white/5 border-t border-white/10 shrink-0">
         <button 
           onClick={toggleMute} 
           className={`w-14 h-14 flex items-center justify-center text-2xl rounded-2xl transition-all shadow-lg ${
