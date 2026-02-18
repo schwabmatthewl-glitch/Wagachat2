@@ -9,7 +9,6 @@ import VideoConference from './components/VideoConference.tsx';
 import AuthScreen from './components/AuthScreen.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import Settings from './components/Settings.tsx';
-import { triggerConfetti } from './utils/effects.ts';
 
 // 4 Hour Inactivity Timeout
 const INACTIVITY_LIMIT = 4 * 60 * 60 * 1000; 
@@ -83,10 +82,6 @@ const AppContent: React.FC<{
     };
   }, [user.id, setUser]);
 
-  const handleMobileNavClick = (e: any) => {
-    triggerConfetti(e.nativeEvent);
-  };
-
   return (
     <div className="flex h-screen h-[100dvh] bg-[#FFF9E6] overflow-hidden relative w-full">
       <div 
@@ -128,13 +123,13 @@ const AppContent: React.FC<{
         </main>
 
         <nav className="md:hidden h-24 bg-white border-t-4 border-yellow-200 flex items-center justify-around shrink-0 z-30 px-4 rounded-t-[3rem] shadow-lg">
-          <Link to="/" onClick={handleMobileNavClick} className="text-4xl p-3">🏠</Link>
-          <Link to="/room/main" onClick={handleMobileNavClick} className="text-4xl p-3 relative">
+          <Link to="/" className="text-4xl p-3">🏠</Link>
+          <Link to="/room/main" className="text-4xl p-3 relative">
             💬
             {hasUnread && <span className="absolute top-2 right-2 w-4 h-4 bg-pink-500 border-2 border-white rounded-full"></span>}
           </Link>
-          <Link to="/settings" onClick={handleMobileNavClick} className="text-4xl p-3">⚙️</Link>
-          <button onClick={(e) => { handleMobileNavClick(e); setSidebarOpen(true); }} className="text-4xl p-3">🔍</button>
+          <Link to="/settings" className="text-4xl p-3">⚙️</Link>
+          <button onClick={() => setSidebarOpen(true)} className="text-4xl p-3">🔍</button>
         </nav>
       </div>
     </div>
