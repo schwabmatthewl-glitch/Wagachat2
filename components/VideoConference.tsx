@@ -170,11 +170,17 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
       const participantList: Participant[] = [];
 
       Object.values(dailyParticipants).forEach((p: any) => {
+        // Try multiple ways to get the tracks (Daily.co API varies)
+        const videoTrack = p.tracks?.video?.persistentTrack || p.tracks?.video?.track || p.videoTrack;
+        const audioTrack = p.tracks?.audio?.persistentTrack || p.tracks?.audio?.track || p.audioTrack;
+        
+        console.log(`Participant ${p.user_name}: video=${!!videoTrack}, audio=${!!audioTrack}, local=${p.local}`);
+        
         participantList.push({
           id: p.session_id,
           name: p.user_name || 'Friend',
-          videoTrack: p.tracks?.video?.persistentTrack,
-          audioTrack: p.tracks?.audio?.persistentTrack,
+          videoTrack: videoTrack,
+          audioTrack: audioTrack,
           isLocal: p.local,
         });
       });
@@ -232,12 +238,17 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
           tracks.push(participant.audioTrack);
         }
         
+        console.log(`Setting up ${participant.name}: ${tracks.length} tracks (video: ${!!participant.videoTrack}, audio: ${!!participant.audioTrack}), isLocal: ${participant.isLocal}`);
+        
         if (tracks.length > 0) {
           const stream = new MediaStream(tracks);
           videoRef.current.srcObject = stream;
+          
+          // Log what's actually in the video element
+          console.log(`${participant.name} video element - muted: ${videoRef.current.muted}, tracks in stream:`, stream.getTracks().map(t => t.kind));
         }
       }
-    }, [participant.videoTrack, participant.audioTrack]);
+    }, [participant.videoTrack, participant.audioTrack, participant.name, participant.isLocal]);
 
     return (
       <div className="relative aspect-[3/4] rounded-3xl overflow-hidden border-4 border-white/10 bg-gray-900 shadow-2xl">
