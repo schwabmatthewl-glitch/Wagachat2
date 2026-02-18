@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../firebase.ts';
-import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp, where, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { Message } from '../types.ts';
 import { EMOJIS } from '../constants.ts';
 
@@ -9,7 +9,7 @@ interface Props {
   user: any;
 }
 
-const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2635/2635-preview.mp3'; // Whimsical Swoosh
+const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2635/2635-preview.mp3'; // Quiet wind/swoosh
 const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; 
 
 const FONTS = [
@@ -40,6 +40,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFormatMenu, setShowFormatMenu] = useState(false);
+  const [friendName, setFriendName] = useState<string | null>(null);
   
   const [activeFont, setActiveFont] = useState(FONTS[0].family);
   const [activeColor, setActiveColor] = useState('#FFFFFF');
@@ -52,7 +53,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   const receiveAudio = useRef(new Audio(RECEIVE_SOUND_URL));
 
   useEffect(() => {
-    sendAudio.current.volume = 0.3;
+    sendAudio.current.volume = 0.3; // Quieter wind sound
     receiveAudio.current.volume = 0.4;
   }, []);
 
@@ -62,9 +63,25 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     }
   };
 
+  // Fetch friend name if in a private room
   useEffect(() => {
-    // Re-initialize for room change
+    if (roomId && roomId.startsWith('pchat_')) {
+      const parts = roomId.split('_');
+      // Identify the other user in the ID: pchat_user1_user2
+      const otherUserId = parts[1] === user.id ? parts[2] : parts[1];
+      if (otherUserId) {
+        getDoc(doc(db, "users", otherUserId)).then(snap => {
+          if (snap.exists()) setFriendName(snap.data().name);
+        }).catch(err => console.error("Error fetching friend:", err));
+      }
+    } else {
+      setFriendName(null);
+    }
+  }, [roomId, user.id]);
+
+  useEffect(() => {
     isFirstLoad.current = true;
+    setMessages([]); // Clear messages when room changes
     
     const q = query(
       collection(db, "messages"),
@@ -113,9 +130,11 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
       setMessages(orderedMessages);
       
       if (isFirstLoad.current) {
-        setTimeout(() => scrollToBottom(true), 100);
+        setTimeout(() => scrollToBottom(true), 150);
       }
       isFirstLoad.current = false;
+    }, (error) => {
+      console.error("Firestore Listen Error:", error);
     });
 
     return () => unsubscribe();
@@ -133,7 +152,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     try {
       sendAudio.current.play().catch(() => {});
       
-      await addDoc(collection(db, "messages"), {
+      const messageData = {
         roomId,
         senderId: user.id,
         senderName: user.name,
@@ -146,12 +165,14 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
         fontFamily: activeFont,
         fontSize: activeSize,
         textColor: activeColor
-      });
+      };
+
+      await addDoc(collection(db, "messages"), messageData);
       setInputText('');
       setShowEmojiPicker(false);
       setShowFormatMenu(false);
     } catch (err) {
-      console.error("Error sending:", err);
+      console.error("Error sending message:", err);
     }
   };
 
@@ -231,8 +252,18 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     });
   };
 
+  const isPrivate = roomId !== 'main';
+
   return (
-    <div className="h-full flex flex-col bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative">
+    <div className={`h-full flex flex-col bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl border-4 md:border-8 border-yellow-50 overflow-hidden relative ${isPrivate ? 'bg-indigo-50/10' : ''}`}>
+      {isPrivate && (
+        <div className="bg-white/90 backdrop-blur-sm p-4 border-b-4 border-indigo-50 text-center z-10 shrink-0">
+          <p className="font-bold text-indigo-500 text-lg md:text-xl uppercase tracking-widest">
+            Private Chat with <span className="text-pink-500">{friendName || "a friend"}</span> 🔒
+          </p>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth custom-scrollbar">
         {messages.map((msg: any) => {
           const currentPhoto = msg.sender === 'user' ? user.photoUrl : msg.photoUrl;
@@ -320,7 +351,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-2 md:gap-4 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
               {EMOJIS.map(e => (
-                <button key={e} onClick={() => addEmoji(e)} className="text-sm md:text-sm hover:scale-125 transition-transform p-1 md:p-1 active:bg-yellow-100 rounded-xl">
+                <button key={e} onClick={() => addEmoji(e)} className="text-[12px] md:text-[14px] hover:scale-150 transition-transform p-1.5 active:bg-yellow-100 rounded-lg">
                   {e}
                 </button>
               ))}

@@ -89,6 +89,21 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
     return `pchat_${ids[0]}_${ids[1]}`;
   };
 
+  const handleNavClick = (e: any) => {
+    triggerConfetti(e.nativeEvent);
+    if (window.innerWidth < 768) {
+      toggle();
+    }
+  };
+
+  const handleFriendClick = (e: any) => {
+    triggerConfetti(e.nativeEvent);
+    // Auto-hide menu when a private chat is started on mobile
+    if (window.innerWidth < 768) {
+      toggle();
+    }
+  };
+
   return (
     <div className={`h-full bg-white border-r-8 border-yellow-100 flex flex-col transition-all duration-300 p-4 md:p-8 items-center md:items-start overflow-hidden`}>
       <div className="mb-12 w-full">
@@ -97,7 +112,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
             <NavLink
               key={item.path}
               to={item.path}
-              onClick={(e) => triggerConfetti(e.nativeEvent)}
+              onClick={handleNavClick}
               className={({ isActive }) => `
                 flex items-center gap-6 p-4 md:p-5 rounded-[2.5rem] transition-all relative w-full
                 ${isActive ? 'bg-blue-500 text-white shadow-2xl scale-105' : 'hover:bg-yellow-50 text-gray-600'}
@@ -153,7 +168,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
             <NavLink 
               key={friend.id} 
               to={`/room/${getPrivateRoomId(friend.id)}`}
-              onClick={(e) => triggerConfetti(e.nativeEvent)}
+              onClick={handleFriendClick}
               className={({ isActive }) => `
                 flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 transition-all w-full
                 ${isActive ? 'border-pink-500 shadow-xl' : 'border-transparent hover:border-pink-200'}
