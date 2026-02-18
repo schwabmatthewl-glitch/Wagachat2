@@ -201,23 +201,34 @@ const VideoConference: React.FC<Props> = ({ userName }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-      if (videoRef.current && participant.videoTrack) {
-        const stream = new MediaStream([participant.videoTrack]);
-        videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        // Combine both video and audio tracks into the stream
+        const tracks: MediaStreamTrack[] = [];
+        if (participant.videoTrack) {
+          tracks.push(participant.videoTrack);
+        }
+        if (participant.audioTrack) {
+          tracks.push(participant.audioTrack);
+        }
+        
+        if (tracks.length > 0) {
+          const stream = new MediaStream(tracks);
+          videoRef.current.srcObject = stream;
+        }
       }
-    }, [participant.videoTrack]);
+    }, [participant.videoTrack, participant.audioTrack]);
 
     return (
       <div className="relative aspect-video rounded-3xl overflow-hidden border-4 border-white/10 bg-gray-900 shadow-2xl">
-        {participant.videoTrack ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted={participant.isLocal}
-            className="w-full h-full object-cover"
-          />
-        ) : (
+        {/* Always render video element for audio playback, hide visually if no video */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={participant.isLocal}
+          className={`w-full h-full object-cover ${!participant.videoTrack ? 'hidden' : ''}`}
+        />
+        {!participant.videoTrack && (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-pink-500/30 to-purple-500/30">
             <span className="text-6xl mb-2">😊</span>
             <span className="text-white font-kids text-lg">Camera off</span>
