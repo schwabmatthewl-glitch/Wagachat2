@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { triggerConfetti } from '../utils/effects.ts';
 
 interface Props {
   onOpenSearch?: () => void;
@@ -32,10 +31,7 @@ const Dashboard: React.FC<Props> = ({ onOpenSearch }) => {
       icon: '🔍',
       color: 'bg-green-400',
       borderColor: 'border-green-600',
-      action: (e: any) => {
-        triggerConfetti(e.nativeEvent);
-        onOpenSearch?.();
-      },
+      action: onOpenSearch,
       emoji: '✨'
     }
   ];
@@ -68,7 +64,7 @@ const Dashboard: React.FC<Props> = ({ onOpenSearch }) => {
           );
 
           return card.link ? (
-            <Link key={idx} to={card.link} className="group" onClick={(e) => triggerConfetti(e.nativeEvent)}>
+            <Link key={idx} to={card.link} className="group">
               {Content}
             </Link>
           ) : (

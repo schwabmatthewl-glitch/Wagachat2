@@ -1,7 +1,7 @@
+
 import React, { useState } from 'react';
 import { db } from '../firebase.ts';
 import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { triggerConfetti } from '../utils/effects.ts';
 
 interface Props {
   onLogin: (userData: any, remember: boolean) => void;
@@ -21,6 +21,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // TRIMMING IS CRITICAL: Mobile keyboards often add accidental spaces
     const cleanUsername = username.trim();
     const cleanPassword = password.trim();
     
@@ -33,13 +34,14 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
       
       if (isLogin) {
         const snap = await getDoc(userRef);
+        // Check password with trimming to be safe
         if (snap.exists() && snap.data().password?.trim() === cleanPassword) {
-          triggerConfetti();
           onLogin(snap.data(), remember);
         } else {
           alert("Oops! Wrong name or password. Try again! 🎈\n(Check for sneaky spaces!)");
         }
       } else {
+        // Sign Up
         const snap = await getDoc(userRef);
         if (snap.exists()) {
           alert("That name is taken! Pick a new one! 🚀");
@@ -56,7 +58,6 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
             createdAt: Date.now()
           };
           await setDoc(userRef, userData);
-          triggerConfetti();
           onLogin(userData, remember);
         }
       }
