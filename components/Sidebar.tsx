@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { db } from '../firebase.ts';
 import { doc, collection, onSnapshot, query, limit, updateDoc, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -8,11 +8,13 @@ interface Props {
   toggle: () => void;
   userId: string;
   hasUnread?: boolean;
+  onSelectFriend?: (friend: any) => void;
 }
 
 const STALE_ONLINE_THRESHOLD = 60000; 
 
-const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
+const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectFriend }) => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -143,7 +145,15 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
             <p className="text-center text-gray-400 font-bold p-4">Add some friends to start chatting! 🌟</p>
           )}
           {myFriends.map((friend) => (
-            <div key={friend.id} className={`flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 border-transparent hover:border-pink-200 transition-all ${!showFullMenu && 'justify-center'}`}>
+            <button 
+              key={friend.id} 
+              onClick={() => {
+                navigate(`/dm/${friend.id}`);
+                if (onSelectFriend) onSelectFriend(friend);
+                if (window.innerWidth < 768) toggle();
+              }}
+              className={`w-full flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 border-transparent hover:border-pink-200 hover:bg-pink-50 transition-all cursor-pointer ${!showFullMenu && 'justify-center'}`}
+            >
               <div className={`w-14 h-14 rounded-xl md:rounded-2xl ${friend.color} flex items-center justify-center text-2xl shadow-lg border-2 md:border-4 border-white flex-shrink-0 overflow-hidden`}>
                 {friend.photoUrl ? (
                   <img src={friend.photoUrl} className="w-full h-full object-cover" alt={friend.name} />
@@ -152,7 +162,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
                 )}
               </div>
               {showFullMenu && (
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 text-left">
                   <p className="font-kids text-gray-800 text-xl truncate">{friend.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`w-2.5 h-2.5 rounded-full ${friend.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
@@ -162,7 +172,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
                   </div>
                 </div>
               )}
-            </div>
+            </button>
           ))}
         </div>
       </div>
