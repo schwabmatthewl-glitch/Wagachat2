@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../firebase.ts';
 import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -311,9 +312,9 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           )}
 
           {showEmojiPicker && (
-            <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-4 md:gap-10 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
+            <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-2 md:gap-4 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
               {EMOJIS.map(e => (
-                <button key={e} onClick={() => addEmoji(e)} className="text-8xl md:text-[10rem] hover:scale-125 transition-transform p-3 active:bg-yellow-100 rounded-3xl">
+                <button key={e} onClick={() => addEmoji(e)} className="text-2xl md:text-4xl hover:scale-125 transition-transform p-1 md:p-2 active:bg-yellow-100 rounded-xl">
                   {e}
                 </button>
               ))}
