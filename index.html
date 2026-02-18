@@ -56,6 +56,18 @@
         background: #E2E8F0;
         border-radius: 10px;
       }
+      /* Confetti Animation */
+      .confetti {
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        border-radius: 50%;
+        animation: confetti-fall 1s ease-out forwards;
+      }
+      @keyframes confetti-fall {
+        0% { transform: translate(0, 0) scale(1); opacity: 1; }
+        100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+      }
     </style>
     <script type="importmap">
     {
