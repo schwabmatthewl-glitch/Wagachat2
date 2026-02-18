@@ -1,7 +1,7 @@
-
 import React, { useState, useRef, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { db } from '../firebase.ts';
-import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { Message } from '../types.ts';
 import { EMOJIS } from '../constants.ts';
 
@@ -9,8 +9,8 @@ interface Props {
   user: any;
 }
 
-const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/1105/1105-preview.mp3'; 
-const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; // Consistent Pop Sound
+const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2635/2635-preview.mp3'; // Whimsical Swoosh
+const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3'; 
 
 const FONTS = [
   { name: 'Quicksand', family: "'Quicksand', sans-serif" },
@@ -35,6 +35,7 @@ const COLORS = [
 ];
 
 const ChatWindow: React.FC<Props> = ({ user }) => {
+  const { id: roomId = 'main' } = useParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -51,7 +52,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   const receiveAudio = useRef(new Audio(RECEIVE_SOUND_URL));
 
   useEffect(() => {
-    sendAudio.current.volume = 0.15;
+    sendAudio.current.volume = 0.3;
     receiveAudio.current.volume = 0.4;
   }, []);
 
@@ -62,8 +63,12 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
   };
 
   useEffect(() => {
+    // Re-initialize for room change
+    isFirstLoad.current = true;
+    
     const q = query(
       collection(db, "messages"),
+      where("roomId", "==", roomId),
       orderBy("timestamp", "desc"),
       limit(100)
     );
@@ -114,7 +119,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
     });
 
     return () => unsubscribe();
-  }, [user.id]);
+  }, [user.id, roomId]);
 
   useEffect(() => {
     if (!isFirstLoad.current) {
@@ -129,6 +134,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
       sendAudio.current.play().catch(() => {});
       
       await addDoc(collection(db, "messages"), {
+        roomId,
         senderId: user.id,
         senderName: user.name,
         senderColor: user.color,
@@ -314,7 +320,7 @@ const ChatWindow: React.FC<Props> = ({ user }) => {
           {showEmojiPicker && (
             <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2.5rem] shadow-2xl border-4 border-yellow-200 flex flex-wrap justify-center gap-2 md:gap-4 w-full max-h-[50vh] overflow-y-auto custom-scrollbar">
               {EMOJIS.map(e => (
-                <button key={e} onClick={() => addEmoji(e)} className="text-2xl md:text-4xl hover:scale-125 transition-transform p-1 md:p-2 active:bg-yellow-100 rounded-xl">
+                <button key={e} onClick={() => addEmoji(e)} className="text-sm md:text-sm hover:scale-125 transition-transform p-1 md:p-1 active:bg-yellow-100 rounded-xl">
                   {e}
                 </button>
               ))}

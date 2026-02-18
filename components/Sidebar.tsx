@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { db } from '../firebase.ts';
 import { doc, collection, onSnapshot, query, limit, updateDoc, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { triggerConfetti } from '../utils/effects.ts';
 
 interface Props {
   isOpen: boolean;
@@ -83,6 +84,11 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
       )
     : [];
 
+  const getPrivateRoomId = (friendId: string) => {
+    const ids = [userId, friendId].sort();
+    return `pchat_${ids[0]}_${ids[1]}`;
+  };
+
   return (
     <div className={`h-full bg-white border-r-8 border-yellow-100 flex flex-col transition-all duration-300 p-4 md:p-8 items-center md:items-start overflow-hidden`}>
       <div className="mb-12 w-full">
@@ -91,6 +97,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={(e) => triggerConfetti(e.nativeEvent)}
               className={({ isActive }) => `
                 flex items-center gap-6 p-4 md:p-5 rounded-[2.5rem] transition-all relative w-full
                 ${isActive ? 'bg-blue-500 text-white shadow-2xl scale-105' : 'hover:bg-yellow-50 text-gray-600'}
@@ -143,7 +150,16 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
             <p className="text-center text-gray-400 font-bold p-4">Add some friends to start chatting! 🌟</p>
           )}
           {myFriends.map((friend) => (
-            <div key={friend.id} className={`flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 border-transparent hover:border-pink-200 transition-all ${!showFullMenu && 'justify-center'}`}>
+            <NavLink 
+              key={friend.id} 
+              to={`/room/${getPrivateRoomId(friend.id)}`}
+              onClick={(e) => triggerConfetti(e.nativeEvent)}
+              className={({ isActive }) => `
+                flex items-center gap-6 p-4 rounded-[2.5rem] bg-white border-4 transition-all w-full
+                ${isActive ? 'border-pink-500 shadow-xl' : 'border-transparent hover:border-pink-200'}
+                ${!showFullMenu && 'justify-center'}
+              `}
+            >
               <div className={`w-14 h-14 rounded-xl md:rounded-2xl ${friend.color} flex items-center justify-center text-2xl shadow-lg border-2 md:border-4 border-white flex-shrink-0 overflow-hidden`}>
                 {friend.photoUrl ? (
                   <img src={friend.photoUrl} className="w-full h-full object-cover" alt={friend.name} />
@@ -162,7 +178,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread }) => {
                   </div>
                 </div>
               )}
-            </div>
+            </NavLink>
           ))}
         </div>
       </div>
