@@ -10,44 +10,70 @@ interface Props {
 const USER_COLORS = ['bg-blue-400', 'bg-pink-400', 'bg-purple-400', 'bg-orange-400', 'bg-green-400', 'bg-yellow-500', 'bg-red-400', 'bg-indigo-400'];
 const AVATARS = ['🐶', '🐱', '🦁', 'Rex', '🐰', '🐼', '🦄', '🦊'];
 
-// Confetti pop animation
+// Confetti pieces
+const CONFETTI_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
+const CONFETTI_SHAPES = ['●', '■', '▲', '★', '♦', '●', '■', '▲'];
+
+// Real confetti explosion animation
 const triggerConfetti = (element: HTMLElement) => {
-  const confetti = document.createElement('div');
-  confetti.innerHTML = '🎉✨🎊';
-  confetti.style.cssText = `
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 24px;
-    pointer-events: none;
-    animation: confettiPop 0.5s ease-out forwards;
-    z-index: 100;
-  `;
-  element.style.position = 'relative';
-  element.appendChild(confetti);
+  const rect = element.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  
+  // Create 20 confetti pieces
+  for (let i = 0; i < 20; i++) {
+    const confetti = document.createElement('div');
+    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    const shape = CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)];
+    const angle = (Math.random() * 360) * (Math.PI / 180);
+    const velocity = 50 + Math.random() * 80;
+    const endX = Math.cos(angle) * velocity;
+    const endY = Math.sin(angle) * velocity - 30;
+    const rotation = Math.random() * 720 - 360;
+    const scale = 0.5 + Math.random() * 0.5;
+    
+    confetti.textContent = shape;
+    confetti.style.cssText = `
+      position: fixed;
+      left: ${centerX}px;
+      top: ${centerY}px;
+      font-size: ${12 + Math.random() * 8}px;
+      color: ${color};
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%) scale(${scale});
+      animation: confettiBurstAuth${i} 0.6s ease-out forwards;
+    `;
+    
+    const styleId = `confetti-burst-auth-${i}-${Date.now()}`;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes confettiBurstAuth${i} {
+        0% { 
+          opacity: 1; 
+          transform: translate(-50%, -50%) scale(${scale}) rotate(0deg); 
+        }
+        100% { 
+          opacity: 0; 
+          transform: translate(calc(-50% + ${endX}px), calc(-50% + ${endY}px)) scale(${scale * 0.5}) rotate(${rotation}deg); 
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(confetti);
+    
+    setTimeout(() => {
+      confetti.remove();
+      style.remove();
+    }, 600);
+  }
   
   // Haptic feedback
   if (navigator.vibrate) {
     navigator.vibrate(50);
   }
-  
-  setTimeout(() => confetti.remove(), 500);
 };
-
-// Add confetti animation to document
-if (typeof document !== 'undefined' && !document.getElementById('confetti-styles-auth')) {
-  const style = document.createElement('style');
-  style.id = 'confetti-styles-auth';
-  style.textContent = `
-    @keyframes confettiPop {
-      0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
-      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
-      100% { opacity: 0; transform: translate(-50%, -100%) scale(1); }
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 const AuthScreen: React.FC<Props> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);

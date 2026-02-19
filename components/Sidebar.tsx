@@ -13,44 +13,72 @@ interface Props {
 
 const STALE_ONLINE_THRESHOLD = 60000;
 
-// Confetti pop animation
-const triggerConfetti = (element: HTMLElement) => {
-  const confetti = document.createElement('div');
-  confetti.innerHTML = '🎉✨🎊';
-  confetti.style.cssText = `
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 24px;
-    pointer-events: none;
-    animation: confettiPop 0.5s ease-out forwards;
-    z-index: 100;
-  `;
-  element.style.position = 'relative';
-  element.appendChild(confetti);
+// Confetti pieces
+const CONFETTI_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
+const CONFETTI_SHAPES = ['●', '■', '▲', '★', '♦', '●', '■', '▲'];
+
+// Real confetti explosion animation
+const triggerConfetti = (element: HTMLElement, event?: React.MouseEvent) => {
+  const rect = element.getBoundingClientRect();
+  const centerX = event ? event.clientX : rect.left + rect.width / 2;
+  const centerY = event ? event.clientY : rect.top + rect.height / 2;
+  
+  // Create 20 confetti pieces
+  for (let i = 0; i < 20; i++) {
+    const confetti = document.createElement('div');
+    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    const shape = CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)];
+    const angle = (Math.random() * 360) * (Math.PI / 180);
+    const velocity = 50 + Math.random() * 80;
+    const endX = Math.cos(angle) * velocity;
+    const endY = Math.sin(angle) * velocity - 30; // Bias upward
+    const rotation = Math.random() * 720 - 360;
+    const scale = 0.5 + Math.random() * 0.5;
+    
+    confetti.textContent = shape;
+    confetti.style.cssText = `
+      position: fixed;
+      left: ${centerX}px;
+      top: ${centerY}px;
+      font-size: ${12 + Math.random() * 8}px;
+      color: ${color};
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%) scale(${scale});
+      animation: confettiBurst${i} 0.6s ease-out forwards;
+    `;
+    
+    // Create unique keyframes for each piece
+    const styleId = `confetti-burst-${i}-${Date.now()}`;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes confettiBurst${i} {
+        0% { 
+          opacity: 1; 
+          transform: translate(-50%, -50%) scale(${scale}) rotate(0deg); 
+        }
+        100% { 
+          opacity: 0; 
+          transform: translate(calc(-50% + ${endX}px), calc(-50% + ${endY}px)) scale(${scale * 0.5}) rotate(${rotation}deg); 
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(confetti);
+    
+    setTimeout(() => {
+      confetti.remove();
+      style.remove();
+    }, 600);
+  }
   
   // Haptic feedback
   if (navigator.vibrate) {
     navigator.vibrate(50);
   }
-  
-  setTimeout(() => confetti.remove(), 500);
 };
 
-// Add confetti animation to document
-if (typeof document !== 'undefined' && !document.getElementById('confetti-styles')) {
-  const style = document.createElement('style');
-  style.id = 'confetti-styles';
-  style.textContent = `
-    @keyframes confettiPop {
-      0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
-      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
-      100% { opacity: 0; transform: translate(-50%, -100%) scale(1); }
-    }
-  `;
-  document.head.appendChild(style);
-} 
 
 const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectFriend }) => {
   const navigate = useNavigate();
@@ -173,7 +201,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
             <NavLink
               key={item.path}
               to={item.path}
-              onClick={(e) => triggerConfetti(e.currentTarget as HTMLElement)}
+              onClick={(e) => triggerConfetti(e.currentTarget as HTMLElement, e as any)}
               className={({ isActive }) => `
                 flex items-center gap-6 p-4 md:p-5 rounded-[2.5rem] transition-all relative w-full
                 ${isActive ? 'bg-blue-500 text-white shadow-2xl scale-105' : 'hover:bg-yellow-50 text-gray-600'}
@@ -229,7 +257,7 @@ const Sidebar: React.FC<Props> = ({ isOpen, toggle, userId, hasUnread, onSelectF
             <button 
               key={friend.id} 
               onClick={(e) => {
-                triggerConfetti(e.currentTarget as HTMLElement);
+                triggerConfetti(e.currentTarget as HTMLElement, e as any);
                 markAsRead(friend.id);
                 navigate(`/dm/${friend.id}`);
                 if (onSelectFriend) onSelectFriend(friend);

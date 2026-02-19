@@ -11,8 +11,26 @@ interface Props {
   dmFriend?: any; // The friend we're DMing with (passed from parent)
 }
 
-const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'; // Swoosh sound
+const SEND_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'; // Soft swoosh
 const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3';
+
+// ============================================
+// SOUND EFFECTS FEATURE (experimental - set to false to disable)
+const SOUND_EFFECTS_ENABLED = true;
+
+// Sound effects for private chat messages
+const SOUND_EFFECTS = [
+  { id: 'trumpet', icon: '🎺', name: 'Trumpet', url: 'https://assets.mixkit.co/active_storage/sfx/2157/2157-preview.mp3' },
+  { id: 'piano', icon: '🎹', name: 'Piano', url: 'https://assets.mixkit.co/active_storage/sfx/2576/2576-preview.mp3' },
+  { id: 'cat', icon: '🐱', name: 'Meow', url: 'https://assets.mixkit.co/active_storage/sfx/209/209-preview.mp3' },
+  { id: 'dog', icon: '🐕', name: 'Bark', url: 'https://assets.mixkit.co/active_storage/sfx/79/79-preview.mp3' },
+  { id: 'coins', icon: '🪙', name: 'Coins', url: 'https://assets.mixkit.co/active_storage/sfx/888/888-preview.mp3' },
+];
+
+// Sound placeholder marker used in text
+const SOUND_MARKER_PREFIX = '[[SND:';
+const SOUND_MARKER_SUFFIX = ']]';
+// ============================================
 
 const FONTS = [
   { name: 'Quicksand', family: "'Quicksand', sans-serif" },
@@ -46,6 +64,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFormatMenu, setShowFormatMenu] = useState(false);
+  const [showSoundPicker, setShowSoundPicker] = useState(false);
   const [fetchedFriend, setFetchedFriend] = useState<any>(null);
   
   const [activeFont, setActiveFont] = useState(FONTS[0].family);
@@ -57,6 +76,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAudio = useRef(new Audio(SEND_SOUND_URL));
   const receiveAudio = useRef(new Audio(RECEIVE_SOUND_URL));
+  const processedMessageIds = useRef<Set<string>>(new Set());
 
   // Use prop if available, otherwise use fetched friend
   const dmFriend = dmFriendProp || fetchedFriend;
@@ -85,7 +105,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
   }, [friendId, dmFriendProp]);
 
   useEffect(() => {
-    sendAudio.current.volume = 0.08;
+    sendAudio.current.volume = 0.4;
     receiveAudio.current.volume = 0.4;
   }, []);
 
@@ -123,12 +143,26 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs: Message[] = [];
       let shouldPlayReceiveSound = false;
+      const soundsToPlay: string[] = [];
       
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
           const data = change.doc.data();
-          if (!isFirstLoad.current && data.senderId !== user.id) {
+          const msgId = change.doc.id;
+          
+          // Only process new messages from others that we haven't seen
+          if (!isFirstLoad.current && data.senderId !== user.id && !processedMessageIds.current.has(msgId)) {
             shouldPlayReceiveSound = true;
+            processedMessageIds.current.add(msgId);
+            
+            // Extract sound effects from the message text
+            if (SOUND_EFFECTS_ENABLED && data.text) {
+              const soundRegex = /\[\[SND:(\w+)\]\]/g;
+              let match;
+              while ((match = soundRegex.exec(data.text)) !== null) {
+                soundsToPlay.push(match[1]);
+              }
+            }
           }
         }
       });
@@ -160,6 +194,22 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
 
       if (shouldPlayReceiveSound) {
         receiveAudio.current.play().catch(() => {});
+        
+        // Play any sound effects embedded in the message (with delay between each)
+        if (SOUND_EFFECTS_ENABLED && soundsToPlay.length > 0) {
+          let delay = 300; // Start after receive sound
+          soundsToPlay.forEach((soundId) => {
+            const soundEffect = SOUND_EFFECTS.find(s => s.id === soundId);
+            if (soundEffect) {
+              setTimeout(() => {
+                const audio = new Audio(soundEffect.url);
+                audio.volume = 0.5;
+                audio.play().catch(() => {});
+              }, delay);
+              delay += 800; // Space out multiple sounds
+            }
+          });
+        }
       }
 
       const orderedMessages = msgs.reverse();
@@ -181,6 +231,28 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
       scrollToBottom();
     }
   }, [messages]);
+
+  // Add sound effect to input text
+  const addSoundEffect = (soundId: string) => {
+    const sound = SOUND_EFFECTS.find(s => s.id === soundId);
+    if (sound) {
+      setInputText(prev => prev + `${SOUND_MARKER_PREFIX}${soundId}${SOUND_MARKER_SUFFIX}`);
+      setShowSoundPicker(false);
+    }
+  };
+
+  // Render text with sound icons displayed
+  const renderInputWithSounds = (text: string) => {
+    if (!text) return '';
+    
+    // Replace sound markers with their icons for display
+    let displayText = text;
+    SOUND_EFFECTS.forEach(sound => {
+      const marker = `${SOUND_MARKER_PREFIX}${sound.id}${SOUND_MARKER_SUFFIX}`;
+      displayText = displayText.split(marker).join(sound.icon);
+    });
+    return displayText;
+  };
 
   const handleSend = async (image?: string) => {
     if (!inputText.trim() && !image) return;
@@ -274,8 +346,18 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
 
   const formatMessageText = (text: string, isEmojiOnly: boolean) => {
     if (!text) return null;
+    
+    // First replace sound markers with their icons
+    let processedText = text;
+    if (SOUND_EFFECTS_ENABLED) {
+      SOUND_EFFECTS.forEach(sound => {
+        const marker = `${SOUND_MARKER_PREFIX}${sound.id}${SOUND_MARKER_SUFFIX}`;
+        processedText = processedText.split(marker).join(sound.icon);
+      });
+    }
+    
     const emojiRegex = /(\p{Emoji_Presentation})/gu;
-    const parts = text.split(emojiRegex);
+    const parts = processedText.split(emojiRegex);
     
     return parts.map((part, i) => {
       if (emojiRegex.test(part)) {
@@ -420,15 +502,48 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
             </div>
           )}
 
+          {/* Sound Effects Picker - Only shown in DM */}
+          {SOUND_EFFECTS_ENABLED && isDM && showSoundPicker && (
+            <div className="absolute bottom-full left-0 mb-4 p-4 bg-white rounded-[2rem] shadow-2xl border-4 border-purple-200 w-auto max-w-xs">
+              <p className="font-kids text-purple-500 text-lg mb-3 text-center">Send a Sound! 🎵</p>
+              <div className="flex flex-wrap justify-center gap-3">
+                {SOUND_EFFECTS.map(sound => (
+                  <button 
+                    key={sound.id} 
+                    onClick={() => addSoundEffect(sound.id)}
+                    className="flex flex-col items-center p-3 rounded-xl hover:bg-purple-50 active:bg-purple-100 transition-all"
+                    title={sound.name}
+                  >
+                    <span className="text-3xl md:text-4xl">{sound.icon}</span>
+                    <span className="text-[10px] font-bold text-purple-400 mt-1">{sound.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 md:gap-3">
             <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100">🌈</button>
             <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100">📎</button>
             <button onClick={() => setShowFormatMenu(!showFormatMenu)} className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 border-yellow-100">🖋️</button>
+            {/* Sound Effects Button - Only shown in DM */}
+            {SOUND_EFFECTS_ENABLED && isDM && (
+              <button 
+                onClick={() => setShowSoundPicker(!showSoundPicker)} 
+                className={`w-12 h-12 md:w-16 md:h-16 bg-white rounded-2xl shadow-md text-2xl md:text-4xl flex items-center justify-center border-2 ${showSoundPicker ? 'border-purple-400 bg-purple-50' : 'border-purple-100'}`}
+              >
+                🎺
+              </button>
+            )}
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
             <input
               type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              value={renderInputWithSounds(inputText)}
+              onChange={(e) => {
+                // We need to preserve the actual markers, so only update if not sound-related
+                // This is tricky - for simplicity, we'll show the actual markers in the input
+                setInputText(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Type here..."
               style={{ fontFamily: activeFont, color: activeColor === '#FFFFFF' ? '#2563EB' : activeColor }}
