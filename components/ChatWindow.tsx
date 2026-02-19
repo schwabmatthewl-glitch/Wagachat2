@@ -20,11 +20,11 @@ const SOUND_EFFECTS_ENABLED = true;
 
 // Sound effects for private chat messages
 const SOUND_EFFECTS = [
-  { id: 'trumpet', icon: '🎺', name: 'Trumpet', url: 'https://assets.mixkit.co/active_storage/sfx/2157/2157-preview.mp3' },
+  { id: 'trumpet', icon: '🎺', name: 'Trumpet', url: 'https://assets.mixkit.co/active_storage/sfx/2155/2155-preview.mp3' },
   { id: 'piano', icon: '🎹', name: 'Piano', url: 'https://assets.mixkit.co/active_storage/sfx/2576/2576-preview.mp3' },
-  { id: 'cat', icon: '🐱', name: 'Meow', url: 'https://assets.mixkit.co/active_storage/sfx/209/209-preview.mp3' },
-  { id: 'dog', icon: '🐕', name: 'Bark', url: 'https://assets.mixkit.co/active_storage/sfx/79/79-preview.mp3' },
-  { id: 'coins', icon: '🪙', name: 'Coins', url: 'https://assets.mixkit.co/active_storage/sfx/888/888-preview.mp3' },
+  { id: 'cat', icon: '🐱', name: 'Meow', url: 'https://assets.mixkit.co/active_storage/sfx/2942/2942-preview.mp3' },
+  { id: 'dog', icon: '🐕', name: 'Bark', url: 'https://assets.mixkit.co/active_storage/sfx/2949/2949-preview.mp3' },
+  { id: 'coins', icon: '🪙', name: 'Coins', url: 'https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3' },
 ];
 
 // Sound placeholder marker used in text
