@@ -18,13 +18,20 @@ const RECEIVE_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2358/2358
 // SOUND EFFECTS FEATURE (experimental - set to false to disable)
 const SOUND_EFFECTS_ENABLED = true;
 
-// Sound effects for private chat messages
+// Sound effects for private chat messages (hosted locally in /public/sounds/)
 const SOUND_EFFECTS = [
-  { id: 'trumpet', icon: '🎺', name: 'Trumpet', url: 'https://assets.mixkit.co/active_storage/sfx/2155/2155-preview.mp3' },
+  { id: 'trumpet', icon: '🎺', name: 'Trumpet', url: '/sounds/Trumpet.mp3' },
   { id: 'piano', icon: '🎹', name: 'Piano', url: 'https://assets.mixkit.co/active_storage/sfx/2576/2576-preview.mp3' },
-  { id: 'cat', icon: '🐱', name: 'Meow', url: 'https://assets.mixkit.co/active_storage/sfx/2942/2942-preview.mp3' },
-  { id: 'dog', icon: '🐕', name: 'Bark', url: 'https://assets.mixkit.co/active_storage/sfx/2949/2949-preview.mp3' },
-  { id: 'coins', icon: '🪙', name: 'Coins', url: 'https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3' },
+  { id: 'yay', icon: '🎉', name: 'Yay!', url: '/sounds/yay.mp3' },
+  { id: 'boing', icon: '🦘', name: 'Boing', url: '/sounds/boing.mp3' },
+  { id: 'dinosaur', icon: '🦖', name: 'Dino', url: '/sounds/dinosaur.wav' },
+  { id: 'chimes', icon: '🔔', name: 'Chimes', url: '/sounds/chimes.wav' },
+  { id: 'birds', icon: '🐦', name: 'Birds', url: '/sounds/birds.wav' },
+  { id: 'splat', icon: '💥', name: 'Splat', url: '/sounds/splat.wav' },
+  { id: 'car', icon: '🚗', name: 'Car', url: '/sounds/car.wav' },
+  { id: 'fairy', icon: '🧚', name: 'Fairy', url: '/sounds/fairy.wav' },
+  { id: 'space', icon: '🚀', name: 'Space', url: '/sounds/space.wav' },
+  { id: 'kitty', icon: '🐱', name: 'Kitty', url: '/sounds/kitty.wav' },
 ];
 
 // Sound placeholder marker used in text
