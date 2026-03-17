@@ -1,79 +1,24 @@
-
 import React, { useState } from 'react';
-import { db } from '../firebase.ts';
-import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { db, auth } from '../firebase.ts';
+import { doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  setPersistence
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { triggerConfetti } from '../utils/effects.ts';
+
+// Converts a username to an internal Firebase Auth email (never shown to users)
+const toEmail = (username: string) => `${username}@wagachat.app`;
 
 interface Props {
-  onLogin: (userData: any, remember: boolean) => void;
+  onLogin: (userData: any) => void;
 }
 
 const USER_COLORS = ['bg-blue-400', 'bg-pink-400', 'bg-purple-400', 'bg-orange-400', 'bg-green-400', 'bg-yellow-500', 'bg-red-400', 'bg-indigo-400'];
 const AVATARS = ['🐶', '🐱', '🦁', 'Rex', '🐰', '🐼', '🦄', '🦊'];
-
-// Confetti pieces
-const CONFETTI_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181', '#AA96DA', '#FCBAD3', '#A8D8EA'];
-const CONFETTI_SHAPES = ['●', '■', '▲', '★', '♦', '●', '■', '▲'];
-
-// Real confetti explosion animation
-const triggerConfetti = (element: HTMLElement) => {
-  const rect = element.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
-  
-  // Create 20 confetti pieces
-  for (let i = 0; i < 20; i++) {
-    const confetti = document.createElement('div');
-    const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
-    const shape = CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)];
-    const angle = (Math.random() * 360) * (Math.PI / 180);
-    const velocity = 50 + Math.random() * 80;
-    const endX = Math.cos(angle) * velocity;
-    const endY = Math.sin(angle) * velocity - 30;
-    const rotation = Math.random() * 720 - 360;
-    const scale = 0.5 + Math.random() * 0.5;
-    
-    confetti.textContent = shape;
-    confetti.style.cssText = `
-      position: fixed;
-      left: ${centerX}px;
-      top: ${centerY}px;
-      font-size: ${12 + Math.random() * 8}px;
-      color: ${color};
-      pointer-events: none;
-      z-index: 9999;
-      transform: translate(-50%, -50%) scale(${scale});
-      animation: confettiBurstAuth${i} 0.6s ease-out forwards;
-    `;
-    
-    const styleId = `confetti-burst-auth-${i}-${Date.now()}`;
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      @keyframes confettiBurstAuth${i} {
-        0% { 
-          opacity: 1; 
-          transform: translate(-50%, -50%) scale(${scale}) rotate(0deg); 
-        }
-        100% { 
-          opacity: 0; 
-          transform: translate(calc(-50% + ${endX}px), calc(-50% + ${endY}px)) scale(${scale * 0.5}) rotate(${rotation}deg); 
-        }
-      }
-    `;
-    document.head.appendChild(style);
-    document.body.appendChild(confetti);
-    
-    setTimeout(() => {
-      confetti.remove();
-      style.remove();
-    }, 600);
-  }
-  
-  // Haptic feedback
-  if (navigator.vibrate) {
-    navigator.vibrate(50);
-  }
-};
 
 const AuthScreen: React.FC<Props> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -85,40 +30,73 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Trigger confetti on the button
-    const button = (e.target as HTMLFormElement).querySelector('button[type="submit"]');
-    if (button) triggerConfetti(button as HTMLElement);
-    
-    // TRIMMING IS CRITICAL: Mobile keyboards often add accidental spaces
+
     const cleanUsername = username.trim();
     const cleanPassword = password.trim();
-    
+
     if (!cleanUsername || !cleanPassword) return;
     setLoading(true);
 
     try {
       const userId = cleanUsername.toLowerCase();
-      const userRef = doc(db, "users", userId);
-      
+      const email = toEmail(userId);
+
+      // Set Firebase Auth persistence based on "remember me"
+      await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+
       if (isLogin) {
-        const snap = await getDoc(userRef);
-        // Check password with trimming to be safe
-        if (snap.exists() && snap.data().password?.trim() === cleanPassword) {
-          onLogin(snap.data(), remember);
-        } else {
-          alert("Oops! Wrong name or password. Try again! 🎈\n(Check for sneaky spaces!)");
+        let userData: any = null;
+
+        try {
+          // Try Firebase Auth login first
+          await signInWithEmailAndPassword(auth, email, cleanPassword);
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
+            // Legacy migration: user exists in Firestore but not yet in Firebase Auth
+            const userRef = doc(db, "users", userId);
+            const snap = await getDoc(userRef);
+            if (snap.exists() && snap.data().password?.trim() === cleanPassword) {
+              // Create Firebase Auth account for this existing user
+              await createUserWithEmailAndPassword(auth, email, cleanPassword);
+              // Remove the plain-text password from Firestore now that Firebase Auth handles it
+              await updateDoc(userRef, { password: null });
+            } else {
+              alert("Oops! Wrong name or password. Try again! 🎈\n(Check for sneaky spaces!)");
+              return;
+            }
+          } else if (authErr.code === 'auth/wrong-password') {
+            alert("Oops! Wrong name or password. Try again! 🎈");
+            return;
+          } else {
+            throw authErr;
+          }
         }
+
+        // Fetch user profile from Firestore
+        const userRef = doc(db, "users", userId);
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          userData = snap.data();
+          triggerConfetti();
+          onLogin(userData);
+        } else {
+          alert("Oops! Account not found. Try again! 🎈");
+        }
+
       } else {
-        // Sign Up
+        // Register: check if username is taken
+        const userRef = doc(db, "users", userId);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
           alert("That name is taken! Pick a new one! 🚀");
         } else {
+          // Create Firebase Auth account (password is securely stored by Firebase — not in Firestore)
+          await createUserWithEmailAndPassword(auth, email, cleanPassword);
+
+          // Create Firestore user profile (no password field)
           const userData = {
             id: userId,
             name: cleanUsername,
-            password: cleanPassword,
             avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
             color: USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)],
             friendIds: [],
@@ -127,12 +105,17 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
             createdAt: Date.now()
           };
           await setDoc(userRef, userData);
-          onLogin(userData, remember);
+          triggerConfetti();
+          onLogin(userData);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Auth Error:", err);
-      alert("Internet error! Try again! ☁️");
+      if (err.code === 'auth/email-already-in-use') {
+        alert("That name is taken! Pick a new one! 🚀");
+      } else {
+        alert("Internet error! Try again! ☁️");
+      }
     } finally {
       setLoading(false);
     }
@@ -143,7 +126,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
       <div className="bg-white rounded-[3rem] p-8 md:p-12 shadow-2xl max-w-md w-full text-center border-8 border-yellow-300">
         <h1 className="text-4xl md:text-5xl font-kids text-blue-500 mb-2 italic">Waga<span className="text-pink-500">chat!</span></h1>
         <div className="text-6xl mb-4 floating">🎈</div>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <input
@@ -164,7 +147,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
               placeholder="Password"
               className="w-full text-center p-3 text-xl font-bold border-4 border-dashed border-blue-200 rounded-2xl focus:border-blue-500 outline-none transition-all"
             />
-            <button 
+            <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-4 bottom-3 text-2xl hover:scale-110 active:scale-90 transition-transform"
@@ -172,12 +155,12 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
               {showPassword ? "🙈" : "👁️"}
             </button>
           </div>
-          
+
           <div className="flex flex-col gap-4 py-2">
             <label className="flex items-center justify-center gap-2 cursor-pointer group">
-              <input 
-                type="checkbox" 
-                checked={remember} 
+              <input
+                type="checkbox"
+                checked={remember}
                 onChange={() => setRemember(!remember)}
                 className="w-6 h-6 rounded-lg accent-pink-500 cursor-pointer"
               />
@@ -194,7 +177,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
           </div>
         </form>
 
-        <button 
+        <button
           onClick={() => {
             setIsLogin(!isLogin);
             setUsername('');

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { db } from './firebase.ts';
-import { doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { db, auth } from './firebase.ts';
+import { doc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import Header from './components/Header.tsx';
 import Sidebar from './components/Sidebar.tsx';
 import ChatWindow from './components/ChatWindow.tsx';
@@ -154,33 +155,44 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check inactivity immediately on reload
-    const lastActivity = parseInt(localStorage.getItem('wagachat_last_activity') || '0');
-    if (lastActivity && (Date.now() - lastActivity > INACTIVITY_LIMIT)) {
-      localStorage.removeItem('wagachat_session');
-      localStorage.removeItem('wagachat_last_activity');
-      setUser(null);
-    } else {
-      const savedUser = localStorage.getItem('wagachat_session');
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        localStorage.setItem('wagachat_last_activity', Date.now().toString());
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Check inactivity — sign out if session is too old
+        const lastActivity = parseInt(localStorage.getItem('wagachat_last_activity') || '0');
+        if (lastActivity && (Date.now() - lastActivity > INACTIVITY_LIMIT)) {
+          await signOut(auth);
+          localStorage.removeItem('wagachat_last_activity');
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        // Derive username from internal Firebase Auth email
+        const username = firebaseUser.email!.replace('@wagachat.app', '');
+        const snap = await getDoc(doc(db, "users", username));
+        if (snap.exists()) {
+          setUser(snap.data());
+          localStorage.setItem('wagachat_last_activity', Date.now().toString());
+        } else {
+          await signOut(auth);
+          setUser(null);
+        }
+      } else {
+        setUser(null);
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  const handleLogin = (userData: any, remember: boolean) => {
+  const handleLogin = (userData: any) => {
     setUser(userData);
     localStorage.setItem('wagachat_last_activity', Date.now().toString());
-    if (remember) {
-      localStorage.setItem('wagachat_session', JSON.stringify(userData));
-    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut(auth);
     setUser(null);
-    localStorage.removeItem('wagachat_session');
     localStorage.removeItem('wagachat_last_activity');
   };
 
