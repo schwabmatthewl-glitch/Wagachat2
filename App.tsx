@@ -167,8 +167,9 @@ const App: React.FC = () => {
           return;
         }
 
-        // Derive username from internal Firebase Auth email
-        const username = firebaseUser.email!.replace('@wagachat.app', '');
+        // Decode the base64-encoded username from the internal Firebase Auth email
+        const encoded = firebaseUser.email!.replace('@wagachat.app', '').replace(/-/g, '+').replace(/_/g, '/');
+        const username = decodeURIComponent(escape(atob(encoded)));
         const snap = await getDoc(doc(db, "users", username));
         if (snap.exists()) {
           setUser(snap.data());

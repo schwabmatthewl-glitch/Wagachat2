@@ -10,8 +10,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { triggerConfetti } from '../utils/effects.ts';
 
-// Converts a username to an internal Firebase Auth email (never shown to users)
-const toEmail = (username: string) => `${username}@wagachat.app`;
+// Converts a username to a safe Firebase Auth email (never shown to users).
+// Base64-encodes the username so any characters (spaces, !, etc.) are handled safely.
+const toEmail = (username: string) => {
+  const encoded = btoa(unescape(encodeURIComponent(username)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return `${encoded}@wagachat.app`;
+};
 
 interface Props {
   onLogin: (userData: any) => void;
