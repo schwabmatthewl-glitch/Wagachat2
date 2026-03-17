@@ -18,6 +18,10 @@ const toEmail = (username: string) => {
   return `${encoded}@wagachat.app`;
 };
 
+// Firebase Auth requires passwords to be at least 6 characters.
+// Pad short passwords consistently so users can still use their original short passwords.
+const toAuthPassword = (p: string) => p.length < 6 ? p.padEnd(6, '_') : p;
+
 interface Props {
   onLogin: (userData: any) => void;
 }
@@ -54,7 +58,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
 
         try {
           // Try Firebase Auth login first
-          await signInWithEmailAndPassword(auth, email, cleanPassword);
+          await signInWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
         } catch (authErr: any) {
           if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
             // Legacy migration: user exists in Firestore but not yet in Firebase Auth
@@ -62,7 +66,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
             const snap = await getDoc(userRef);
             if (snap.exists() && snap.data().password?.trim() === cleanPassword) {
               // Create Firebase Auth account for this existing user
-              await createUserWithEmailAndPassword(auth, email, cleanPassword);
+              await createUserWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
               // Remove the plain-text password from Firestore now that Firebase Auth handles it
               await updateDoc(userRef, { password: null });
             } else {
@@ -96,7 +100,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
           alert("That name is taken! Pick a new one! 🚀");
         } else {
           // Create Firebase Auth account (password is securely stored by Firebase — not in Firestore)
-          await createUserWithEmailAndPassword(auth, email, cleanPassword);
+          await createUserWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
 
           // Create Firestore user profile (no password field)
           const userData = {

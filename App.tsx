@@ -156,32 +156,40 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Check inactivity — sign out if session is too old
-        const lastActivity = parseInt(localStorage.getItem('wagachat_last_activity') || '0');
-        if (lastActivity && (Date.now() - lastActivity > INACTIVITY_LIMIT)) {
-          await signOut(auth);
-          localStorage.removeItem('wagachat_last_activity');
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+      try {
+        if (firebaseUser) {
+          // Check inactivity — sign out if session is too old
+          const lastActivity = parseInt(localStorage.getItem('wagachat_last_activity') || '0');
+          if (lastActivity && (Date.now() - lastActivity > INACTIVITY_LIMIT)) {
+            await signOut(auth);
+            localStorage.removeItem('wagachat_last_activity');
+            setUser(null);
+            return;
+          }
 
-        // Decode the base64-encoded username from the internal Firebase Auth email
-        const encoded = firebaseUser.email!.replace('@wagachat.app', '').replace(/-/g, '+').replace(/_/g, '/');
-        const username = decodeURIComponent(escape(atob(encoded)));
-        const snap = await getDoc(doc(db, "users", username));
-        if (snap.exists()) {
-          setUser(snap.data());
-          localStorage.setItem('wagachat_last_activity', Date.now().toString());
+          // Decode the base64-encoded username from the internal Firebase Auth email.
+          // Restore the padding that was stripped when the email was created.
+          const raw = firebaseUser.email!.replace('@wagachat.app', '').replace(/-/g, '+').replace(/_/g, '/');
+          const padded = raw + '=='.slice(0, (4 - raw.length % 4) % 4);
+          const username = decodeURIComponent(escape(atob(padded)));
+          const snap = await getDoc(doc(db, "users", username));
+          if (snap.exists()) {
+            setUser(snap.data());
+            localStorage.setItem('wagachat_last_activity', Date.now().toString());
+          } else {
+            await signOut(auth);
+            setUser(null);
+          }
         } else {
-          await signOut(auth);
           setUser(null);
         }
-      } else {
+      } catch (e) {
+        console.error("Session restore error:", e);
+        await signOut(auth);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
