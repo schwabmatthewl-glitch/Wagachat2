@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase.ts';
-import { doc, updateDoc, onSnapshot, arrayRemove, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { arrayRemove, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 
 interface Props {
   user: any;

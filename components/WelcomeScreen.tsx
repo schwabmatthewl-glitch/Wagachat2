@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { db } from '../firebase.ts';
-import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, setDoc } from "firebase/firestore";
 
 interface Props {
   onStart: (name: string) => void;

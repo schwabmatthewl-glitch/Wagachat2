@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../firebase.ts';
-import { collection, addDoc, query, orderBy, onSnapshot, limit, Timestamp, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, Timestamp, where } from "firebase/firestore";
 import { Message } from '../types.ts';
 import { EMOJIS } from '../constants.ts';
 

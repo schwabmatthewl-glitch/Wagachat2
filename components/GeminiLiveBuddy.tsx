@@ -2,6 +2,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
+declare global {
+  interface Window {
+    aistudio?: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
+
 // Manual implementation of audio encoding/decoding as required by guidelines
 function decode(base64: string) {
   const binaryString = atob(base64);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { db } from '../firebase.ts';
-import { doc, collection, onSnapshot, query, limit, updateDoc, arrayUnion, getDoc, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { arrayUnion, collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 
 interface Props {
   isOpen: boolean;

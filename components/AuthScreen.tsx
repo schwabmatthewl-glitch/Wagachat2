@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { db, auth } from '../firebase.ts';
-import { doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   browserLocalPersistence,
   browserSessionPersistence,
   setPersistence
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+} from "firebase/auth";
 import { triggerConfetti } from '../utils/effects.ts';
 
 // Converts a username to a safe Firebase Auth email (never shown to users).
