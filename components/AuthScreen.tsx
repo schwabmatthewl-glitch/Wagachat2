@@ -85,6 +85,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
         const userRef = doc(db, "users", userId);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
+          await auth.currentUser?.getIdToken(true);
           userData = snap.data();
           triggerConfetti();
           onLogin(userData);
@@ -114,6 +115,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
             createdAt: Date.now()
           };
           await setDoc(userRef, userData);
+          await auth.currentUser?.getIdToken(true);
           triggerConfetti();
           onLogin(userData);
         }
