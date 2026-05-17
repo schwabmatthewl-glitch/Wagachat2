@@ -74,6 +74,11 @@ const AppContent: React.FC<{
 
     const updateHeartbeat = async () => {
       try {
+        if (!auth.currentUser) {
+          console.warn("Skipping heartbeat: Firebase Auth is not signed in.");
+          return;
+        }
+        await auth.currentUser.getIdToken();
         await updateDoc(userRef, {
           lastSeen: Date.now(),
           status: 'online'

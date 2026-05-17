@@ -2,15 +2,26 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Temporary fallback for the family migration/test window.
+    // Remove after all devices are confirmed to use Firebase Auth correctly.
+    function isTemporaryMigrationWindow() {
+      return request.time < timestamp.date(2026, 5, 20);
+    }
+
     match /users/{userId} {
       // Existing Wagachat login/search flows read user profiles from the client.
       allow read: if true;
-      allow create, update: if request.auth != null;
+      allow create, update: if isSignedIn() || isTemporaryMigrationWindow();
       allow delete: if false;
     }
 
     match /messages/{messageId} {
-      allow read, create: if request.auth != null;
+      allow read: if true;
+      allow create: if isSignedIn() || isTemporaryMigrationWindow();
       allow update, delete: if false;
     }
 

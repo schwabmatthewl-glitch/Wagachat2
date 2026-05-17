@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { db } from '../firebase.ts';
+import { auth, db } from '../firebase.ts';
 import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, Timestamp, where } from "firebase/firestore";
 import { Message } from '../types.ts';
 import { EMOJIS } from '../constants.ts';
@@ -269,6 +269,11 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
     try {
       setIsSending(true);
       sendAudio.current.play().catch(() => {});
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        throw new Error("Firebase Auth is not signed in. Please log out and log back in.");
+      }
+      await firebaseUser.getIdToken(true);
       
       const messageData: any = {
         senderId: user.id,
