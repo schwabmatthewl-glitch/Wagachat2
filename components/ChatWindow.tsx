@@ -73,6 +73,7 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
   const [showFormatMenu, setShowFormatMenu] = useState(false);
   const [showSoundPicker, setShowSoundPicker] = useState(false);
   const [fetchedFriend, setFetchedFriend] = useState<any>(null);
+  const [isSending, setIsSending] = useState(false);
   
   const [activeFont, setActiveFont] = useState(FONTS[0].family);
   const [activeColor, setActiveColor] = useState('#FFFFFF');
@@ -263,8 +264,10 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
 
   const handleSend = async (image?: string) => {
     if (!inputText.trim() && !image) return;
+    if (isSending) return;
     
     try {
+      setIsSending(true);
       sendAudio.current.play().catch(() => {});
       
       const messageData: any = {
@@ -292,6 +295,9 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
       setShowFormatMenu(false);
     } catch (err) {
       console.error("Error sending:", err);
+      alert("Message couldn't send. Please check the connection and try again.");
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -556,7 +562,9 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
               style={{ fontFamily: activeFont, color: activeColor === '#FFFFFF' ? '#2563EB' : activeColor }}
               className="flex-1 p-3 md:p-5 bg-white rounded-2xl outline-none font-bold shadow-inner text-base md:text-2xl"
             />
-            <button onClick={() => handleSend()} disabled={!inputText.trim()} className="w-12 h-12 md:w-16 md:h-16 bg-blue-500 text-white rounded-2xl shadow-lg text-2xl md:text-3xl flex items-center justify-center active:scale-95 disabled:opacity-50">🚀</button>
+            <button onClick={() => handleSend()} disabled={!inputText.trim() || isSending} className="w-12 h-12 md:w-16 md:h-16 bg-blue-500 text-white rounded-2xl shadow-lg text-2xl md:text-3xl flex items-center justify-center active:scale-95 disabled:opacity-50">
+              {isSending ? '...' : '🚀'}
+            </button>
           </div>
         </div>
       </div>
