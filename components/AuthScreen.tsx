@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { db, auth } from '../firebase.ts';
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import {
+  UserCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   browserLocalPersistence,
@@ -55,10 +56,11 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
 
       if (isLogin) {
         let userData: any = null;
+        let credential: UserCredential | null = null;
 
         try {
           // Try Firebase Auth login first
-          await signInWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
+          credential = await signInWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
         } catch (authErr: any) {
           if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
             // Legacy migration: user exists in Firestore but not yet in Firebase Auth
@@ -66,7 +68,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
             const snap = await getDoc(userRef);
             if (snap.exists() && snap.data().password?.trim() === cleanPassword) {
               // Create Firebase Auth account for this existing user
-              await createUserWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
+              credential = await createUserWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
               // Remove the plain-text password from Firestore now that Firebase Auth handles it
               await updateDoc(userRef, { password: null });
             } else {
@@ -80,6 +82,8 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
             throw authErr;
           }
         }
+
+        await credential?.user.getIdToken(true);
 
         // Fetch user profile from Firestore
         const userRef = doc(db, "users", userId);
@@ -100,7 +104,8 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
           alert("That name is taken! Pick a new one! 🚀");
         } else {
           // Create Firebase Auth account (password is securely stored by Firebase — not in Firestore)
-          await createUserWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
+          const credential = await createUserWithEmailAndPassword(auth, email, toAuthPassword(cleanPassword));
+          await credential.user.getIdToken(true);
 
           // Create Firestore user profile (no password field)
           const userData = {
