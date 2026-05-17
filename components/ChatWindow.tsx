@@ -272,10 +272,10 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
       
       const messageData: any = {
         senderId: user.id,
-        senderName: user.name,
-        senderColor: user.color,
+        senderName: user.name || user.id || 'Friend',
+        senderColor: user.color || 'bg-blue-400',
         text: inputText,
-        avatar: user.avatar,
+        avatar: user.avatar || '👤',
         photoUrl: user.photoUrl || null,
         timestamp: Timestamp.now(),
         imageUrl: image || null,
@@ -295,7 +295,8 @@ const ChatWindow: React.FC<Props> = ({ user, dmFriend: dmFriendProp }) => {
       setShowFormatMenu(false);
     } catch (err) {
       console.error("Error sending:", err);
-      alert("Message couldn't send. Please check the connection and try again.");
+      const error = err as { code?: string; message?: string };
+      alert(`Message couldn't send.\n${error.code || 'unknown'}: ${error.message || 'Please check the connection and try again.'}`);
     } finally {
       setIsSending(false);
     }
