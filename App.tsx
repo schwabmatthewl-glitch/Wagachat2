@@ -75,8 +75,7 @@ const AppContent: React.FC<{
     const updateHeartbeat = async () => {
       try {
         if (!auth.currentUser) {
-          console.warn("Firebase Auth is not signed in. Logging out stale Wagachat session.");
-          onLogout();
+          console.warn("Skipping heartbeat: Firebase Auth is not signed in.");
           return;
         }
         await auth.currentUser.getIdToken();
@@ -209,7 +208,6 @@ const App: React.FC = () => {
     await signOut(auth);
     setUser(null);
     localStorage.removeItem('wagachat_last_activity');
-    localStorage.removeItem('wagachat_session');
   };
 
   if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-yellow-50 font-kids text-3xl text-blue-500">Loading... 🎈</div>;
