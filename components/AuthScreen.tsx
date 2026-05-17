@@ -89,7 +89,11 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
         const userRef = doc(db, "users", userId);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
+          if (credential) {
+            await updateDoc(userRef, { authUid: credential.user.uid });
+          }
           userData = snap.data();
+          userData.authUid = credential?.user.uid || userData.authUid;
           triggerConfetti();
           onLogin(userData);
         } else {
@@ -111,6 +115,7 @@ const AuthScreen: React.FC<Props> = ({ onLogin }) => {
           const userData = {
             id: userId,
             name: cleanUsername,
+            authUid: credential.user.uid,
             avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
             color: USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)],
             friendIds: [],

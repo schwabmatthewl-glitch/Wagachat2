@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { db, auth } from './firebase.ts';
-import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, limit, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import Header from './components/Header.tsx';
 import Sidebar from './components/Sidebar.tsx';
@@ -167,17 +167,18 @@ const App: React.FC = () => {
             return;
           }
 
-          // Decode the base64-encoded username from the internal Firebase Auth email.
-          // Restore the padding that was stripped when the email was created.
-          const raw = firebaseUser.email!.replace('@wagachat.app', '').replace(/-/g, '+').replace(/_/g, '/');
-          const padded = raw + '=='.slice(0, (4 - raw.length % 4) % 4);
-          const username = decodeURIComponent(escape(atob(padded)));
-          const snap = await getDoc(doc(db, "users", username));
-          if (snap.exists()) {
-            setUser(snap.data());
+          const byAuthUid = query(
+            collection(db, "users"),
+            where("authUid", "==", firebaseUser.uid),
+            limit(1)
+          );
+          const matches = await getDocs(byAuthUid);
+          const userDoc = matches.docs[0];
+
+          if (userDoc) {
+            setUser(userDoc.data());
             localStorage.setItem('wagachat_last_activity', Date.now().toString());
           } else {
-            await signOut(auth);
             setUser(null);
           }
         } else {
@@ -185,7 +186,6 @@ const App: React.FC = () => {
         }
       } catch (e) {
         console.error("Session restore error:", e);
-        await signOut(auth);
         setUser(null);
       } finally {
         setLoading(false);
